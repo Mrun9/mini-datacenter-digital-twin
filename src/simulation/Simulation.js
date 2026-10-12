@@ -1,6 +1,6 @@
-import { PhysicalSimulator } from './PhysicalSimulator.js';
-import { Sensor } from './Sensor.js';
-import { DigitalTwin } from './DigitalTwin.js';
+import { PhysicalSimulator } from "./PhysicalSimulator.js";
+import { Sensor } from "./Sensor.js";
+import { DigitalTwin } from "./DigitalTwin.js";
 export class Simulation {
   constructor() {
     this.physical = new PhysicalSimulator();
@@ -26,6 +26,7 @@ export class Simulation {
     this.timeSeconds += seconds;
     const packet = this.sensor.read(this.physical, this.timeSeconds);
     if (packet) this.twin.synchronize(packet);
-    if (Number.isInteger(this.timeSeconds)) this.history = [...this.history.slice(-119), this.historyPoint()];
+    if (Number.isInteger(this.timeSeconds))
+      this.history = [...this.history.slice(-119), this.historyPoint()];
   }
 }
