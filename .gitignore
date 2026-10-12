@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+*.log
+*.tmp
+.DS_Store
+._*
+coverage/
+.openai/*.local.*
+.openai/cache/
