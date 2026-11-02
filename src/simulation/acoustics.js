@@ -334,3 +334,138 @@ export function evaluateSiteAcoustics({
     },
   };
 }
+
+/**
+ * Calculates noise level at an arbitrary probe distance in meters.
+ */
+export function calculateNoiseAtPoint({
+  probeDistanceMeters = 100,
+  itPowerKw = 500,
+  ambientTempC = 22,
+  fanSpeedPercent = 75,
+  terrainEchoDb = 0.0,
+  chillerPlacement = "surface",
+  wallHeightMeters = 8,
+  wallMaterial = "absorptive_metal",
+  wallEnabled = true,
+  treeBufferDepthMeters = 25,
+  treeSpeciesId = "virginia_pine",
+  treeEnabled = true,
+  chillerOrientationAngle = 90,
+  municipalNoiseLimitDba = 45,
+}) {
+  const d = Math.max(2, probeDistanceMeters);
+  const sourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  const geometricDecay = 20 * Math.log10(d) + 11.0;
+
+  // Evaluate mitigations
+  const placementData = calculatePlacementAttenuation(chillerPlacement);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, d, wallEnabled);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
+
+  let effectiveWallAtten = wallData.attenuationDb;
+  let effectiveDirectivity = directivityAttenuation;
+  if (chillerPlacement === "underground") {
+    effectiveWallAtten *= 0.25;
+    effectiveDirectivity *= 0.5;
+  } else if (chillerPlacement === "semi_berm") {
+    effectiveWallAtten *= 0.85;
+  }
+
+  // If probe is closer than wall (e.g. < 15m), wall doesn't attenuate
+  if (d < 18) {
+    effectiveWallAtten = 0;
+  }
+  // If probe is closer than tree buffer (e.g. < 25m), trees don't attenuate
+  if (d < 25) {
+    treeData.attenuationDb = 0;
+  }
+
+  const totalMitigationDb =
+    placementData.attenuationDb +
+    effectiveWallAtten +
+    treeData.attenuationDb +
+    effectiveDirectivity;
+
+  const backgroundNoiseFloor = 32.0;
+  const rawReceivedLp = sourceLw - geometricDecay + terrainEchoDb - totalMitigationDb;
+  const netReceivedLp = 10 * Math.log10(10 ** (backgroundNoiseFloor / 10) + 10 ** (Math.max(15, rawReceivedLp) / 10));
+
+  const marginDb = municipalNoiseLimitDba - netReceivedLp;
+  const isCompliant = marginDb >= 0;
+
+  const lowFreqBonus =
+    chillerPlacement === "underground"
+      ? 5.0
+      : chillerPlacement === "rear_shielded"
+      ? 9.5
+      : 14.5;
+  const netReceivedLpC = Math.round((netReceivedLp + lowFreqBonus) * 10) / 10;
+
+  let sensation = "Quiet Environment";
+  if (netReceivedLp > 75) sensation = "Intense Plant Machinery Roar";
+  else if (netReceivedLp > 65) sensation = "Loud Industrial Compressor Noise";
+  else if (netReceivedLp > 50) sensation = "Audible Continuous Hum";
+  else if (netReceivedLp > 42) sensation = "Low Background Whine";
+  else sensation = "Quiet Sleep Sanctuary (Compliant)";
+
+  return {
+    distanceMeters: Math.round(d),
+    netDba: Math.round(netReceivedLp * 10) / 10,
+    netDbc: netReceivedLpC,
+    marginDb: Math.round(marginDb * 10) / 10,
+    isCompliant,
+    sensation,
+  };
+}
+
+/**
+ * Calculates isophone radii (meters) for concentric noise circles.
+ */
+export function calculateIsophoneRadii({
+  targetDbaLevels = [75, 65, 55, 45, 40],
+  itPowerKw = 500,
+  ambientTempC = 22,
+  fanSpeedPercent = 75,
+  terrainEchoDb = 0.0,
+  chillerPlacement = "surface",
+  wallHeightMeters = 8,
+  wallMaterial = "absorptive_metal",
+  wallEnabled = true,
+  treeBufferDepthMeters = 25,
+  treeSpeciesId = "virginia_pine",
+  treeEnabled = true,
+  chillerOrientationAngle = 90,
+}) {
+  const sourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  const placementData = calculatePlacementAttenuation(chillerPlacement);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, 300, wallEnabled);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
+
+  let effectiveWallAtten = wallData.attenuationDb;
+  let effectiveDirectivity = directivityAttenuation;
+  if (chillerPlacement === "underground") {
+    effectiveWallAtten *= 0.25;
+    effectiveDirectivity *= 0.5;
+  } else if (chillerPlacement === "semi_berm") {
+    effectiveWallAtten *= 0.85;
+  }
+
+  const totalMitigationDb =
+    placementData.attenuationDb +
+    effectiveWallAtten +
+    treeData.attenuationDb +
+    effectiveDirectivity;
+
+  return targetDbaLevels.map((targetDba) => {
+    // d = 10^((Lw - 11 + terrainEcho - totalMitigation - targetDba) / 20)
+    const exponent = (sourceLw - 11.0 + terrainEchoDb - totalMitigationDb - targetDba) / 20.0;
+    const radiusMeters = Math.max(3, Math.min(1200, Math.pow(10, exponent)));
+    return {
+      targetDba,
+      radiusMeters: Math.round(radiusMeters),
+    };
+  });
+}
