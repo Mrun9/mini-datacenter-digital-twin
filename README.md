@@ -1,14 +1,54 @@
-# Mini Data Center Digital Twin
+# AeroAcoustic Data Center Digital Twin (Innovation Prototype)
 
-A readable, browser-only educational simulation: three servers, two-second sensors, an independent digital twin, a 30-second temperature forecast, and an interactive 3D room.
+An interactive, browser-only spatial digital twin platform designed to **simulate, predict, and eliminate community noise pollution caused by data center cooling plants (chillers and cooling towers)** across diverse geographic regions.
 
-- **Private GitHub repository:** https://github.com/Mrun9/mini-datacenter-digital-twin
-- **Private ChatGPT Site:** https://mini-datacenter-digital-twin.muur3.chatgpt.site
-- **Learning walkthrough:** [LEARNING_GUIDE.md](LEARNING_GUIDE.md)
+- **GitHub Repository:** https://github.com/Mrun9/mini-datacenter-digital-twin
+- **Walkthrough & Physics Guide:** [LEARNING_GUIDE.md](LEARNING_GUIDE.md)
 
-## Run locally
+---
 
-Node.js 22.12+ recommended (also compatible with supported newer Node versions).
+## 🎯 Innovation Need Statement & Problem Context
+
+Data center noise pollution has emerged as a critical environmental and legal conflict:
+* **The Culprit:** Outdoor mechanical chillers, cooling towers, and CRAH exhaust fans emit continuous $24/7$ low-frequency hums ($60\text{--}120\text{ Hz}$) and turbulent air roar ($95\text{--}114\text{ dBA}$ sound power at the plant).
+* **The Community Conflict:** In suburban hubs like **Loudoun County, VA ("Data Center Alley")**, Chandler, AZ, and Dublin, Ireland, residents living within $250\text{--}600\text{m}$ suffer sleep deprivation, leading to municipal lawsuits and zoning moratoriums. Most local ordinances enforce strict nighttime limits of **$40\text{--}45\text{ dBA}$ at the property line**.
+* **The Solution:** A **"Tony Stark" Spatial Digital Twin** that simulates site layout, subterranean chiller placement, high-absorption perimeter walls, and native regional bio-acoustic buffers *before* and *after* construction, paired with autonomous cross-fleet night-curfew workload balancing.
+
+---
+
+## 🚀 Key Prototype Innovations
+
+### 1. Interactive 3D Spatial Sandbox (`AcousticSiteSandbox3D.jsx`)
+* **Movable Chillers:** Toggle between **Surface Yard** ($0\text{ dB}$ attenuation), **Semi-Bermed Basin** ($-11.5\text{ dB}$), and **Subterranean Bunker Vault** ($-28\text{ dB}$ direct line-of-sight elimination).
+* **Exhaust Baffle Direction:** Rotate cooling exhaust fans away from residential developments ($0^\circ\text{ to }180^\circ$).
+* **Acoustic Barrier Walls:** Drag-and-adjust wall heights from **$2\text{m}$ up to $16\text{m}$** with material physics:
+  * *Perforated Absorptive Metal Composite* (NRC 0.95 — maximum sound absorption)
+  * *Dense Precast Concrete* (NRC 0.05 — high mass reflection)
+  * *Acoustic Mass Timber* (NRC 0.65 — carbon-negative glulam slats)
+  * *Acoustic Polycarbonate* (Transparent daylighting)
+* **Regional Native Bio-Acoustic Buffers:** Plant species-specific tree screens optimized for acoustic scattering, zero-to-low irrigation, and minimal maintenance:
+  * *Loudoun County, VA:* Eastern White & Virginia Pine (Dense needle evergreen, rain-fed)
+  * *Phoenix, AZ:* Arizona Cypress & Velvet Mesquite (Extreme heat/drought hardy, drip xeriscaping)
+  * *Columbia River Gorge, OR:* Western Red Cedar & Douglas Fir (Rain-fed conifer sound screen)
+  * *Dublin, Ireland:* Irish Yew & Scots Pine (Damp-tolerant maritime acoustic hedging)
+* **Real-time 3D Acoustic Wave Rings:** Animated isophone rings on the terrain (Red $>65\text{ dBA}$, Amber $>50\text{ dBA}$, Green $<45\text{ dBA}$) that visually shrink back toward the plant as mitigations are applied.
+
+### 2. Multi-Site Geographic Fleet & "Follow-the-Moon" Load Shifting
+* Compare real-world data centers across different microclimates, terrains (mountain canyon echoes vs flat plains), and legal limits.
+* **Autonomous Night Curfew Shifting:** Automatically migrates compute load from Loudoun County at 10:00 PM (night noise curfew) to daylight/hydro-powered sites with underground chillers, keeping global throughput 24/7 without community noise violations.
+
+### 3. Live Web Audio "Ear Simulator" (`audioSynthesizer.js`)
+* Judges and users can click **"Listen at Neighbor's Porch"** to hear a real-time synthesized acoustic environment:
+  * $60\text{ Hz} / 120\text{ Hz}$ harmonic mechanical compressor drone
+  * Low-pass filtered turbulent fan airflow rush
+  * Dynamic amplitude scaling matching the calculated dBA at the residential property line.
+
+### 4. Silicon-to-Neighborhood Digital Twin Link
+* Internal compute utilization (CPU slider / unit count in server racks) directly drives heat rejection demand, which scales outdoor chiller fan speed and acoustic emission.
+
+---
+
+## 🛠️ Run Locally
 
 ```sh
 cd "/Volumes/Projects/Data Center twin"
@@ -16,37 +56,22 @@ npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite (normally http://127.0.0.1:5173).
+Open the local URL (usually http://127.0.0.1:5173).
 
 ```sh
-npm test
-npm run build
-npm run preview
+npm test      # Runs 13 physics and acoustic unit tests
+npm run build # Generates production bundle
 ```
 
-## Architecture
+---
 
-Plain JavaScript modules model the physical world, sensor packets, twin estimates, and predictions. React displays controls and readings. Recharts draws physical and estimated temperature history. React Three Fiber renders simple Three.js geometry; the 3D module loads only when its tab is opened.
+## 📐 Scientific & Engineering Foundations
 
-```text
-Controls → PhysicalSimulator → Sensor → DigitalTwin → Predictor
-                ↓                           ↓
-          3D physical view            Estimated readings
-                └───────── Dashboard / graph ┘
-```
-
-No backend, database, application authentication, cloud data services, or ML training. Vite produces static `dist/` output for ChatGPT Sites; Sites provides owner-only access. All simulation data stays in memory and resets on reload. No external textures or models are needed. A browser without WebGL can still use the dashboard and server controls.
-
-## Learning objectives
-
-Understand the difference between reality, measurements, and estimates; inspect the complete synchronization loop; explore delayed or missing information; and change a thermal or acoustic equation to observe its effect. The guide documents all important source files and provides three experiments.
-
-## Model limits
-
-Temperatures and dBA values are illustrative, not physically validated. Three fixed racks each contain 1–6 units sharing one temperature and one fan. There is no airflow coupling, thermal throttling, hardware shutdown, uncertainty interval, or sound playback. Forecasts assume unchanged last-observed inputs. Simulation time slows when a browser throttles background timers.
-
-## Version control and deployment
-
-The repository must remain **private** unless its owner explicitly approves a visibility change. Six milestone commits cover setup, physics, sensors/twin, dashboard, 3D, and final integration/documentation. Tests and a production build are required before a milestone commit.
-
-`.openai/hosting.json` identifies the Site and its static output folder. Use the Sites workflow to synchronize committed source, package the matching build, and deploy privately. Never commit credentials, `.env`, `node_modules`, or `dist`. Site source synchronization may use a second Git remote; GitHub remains the user's private source repository.
+1. **Source Sound Power ($L_w$):** Scaled with compressor compression ratio, ambient temperature penalty, and tip speed:
+   $$L_w = 108.0 + \Delta T_{\text{ambient}} + 18\log_{10}\left(\frac{\text{RPM}}{\text{RPM}_{\text{nom}}}\right) + 10\log_{10}\left(\frac{P_{\text{IT}}}{500}\right)$$
+2. **Hemispherical Distance Decay (ISO 9613-2):**
+   $$L_p = L_w - 20\log_{10}(d) - 11$$
+3. **Barrier Wall Insertion Loss (Maekawa / Fresnel Diffraction):**
+   $$N = \frac{2}{\lambda}\delta, \quad A_{\text{barrier}} = 10\log_{10}(3 + 20N) + \text{Bonus}_{\text{NRC}}$$
+4. **Bio-Acoustic Foliage Scattering (ISO 9613-2):**
+   $$A_{\text{veg}} = 12 \cdot \left(1 - \exp\left(-\frac{\alpha \cdot \text{depth}}{10}\right)\right) + A_{\text{porous\_ground}}$$
