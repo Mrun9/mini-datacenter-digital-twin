@@ -211,7 +211,7 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
           <span className="eyebrow-pill">ENGINEERING INNOVATIONS</span>
           <h2>Core Prototype Features & Spatial Capabilities</h2>
           <p>
-            Experience an unprecedented level of spatial interaction, decibel transparency, and Stark-inspired 3D visualization.
+            Experience rigorous spatial interaction, decibel transparency, and architectural 3D visualization.
           </p>
         </div>
 
@@ -253,13 +253,13 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
 
           {/* Feature 4 */}
           <div className="feature-card">
-            <div className="feature-icon-wrapper">🦾</div>
-            <h3>Iron Man Exploded View ("Stark Mode")</h3>
+            <div className="feature-icon-wrapper">📐</div>
+            <h3>Exploded Subsystem View (CAD Disassembly)</h3>
             <p>
-              Engage the holographic disassembly slider to lift the data center roof, expand exterior concrete walls,
-              and explode V-bank chiller components into floating Stark-style subassemblies with internal server halls.
+              Engage the subassembly disassembly slider to lift the facility roof, separate exterior structural walls,
+              and explode V-bank chiller mechanical components to inspect internal compute rows and cooling loops.
             </p>
-            <div className="feature-pill">Holographic Stark Disassembly</div>
+            <div className="feature-pill">Subsystem Disassembly</div>
           </div>
 
           {/* Feature 5 */}

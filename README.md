@@ -12,7 +12,7 @@ An interactive, browser-only spatial digital twin platform designed to **simulat
 Data center noise pollution has emerged as a critical environmental and legal conflict:
 * **The Culprit:** Outdoor mechanical chillers, cooling towers, and CRAH exhaust fans emit continuous $24/7$ low-frequency hums ($60\text{--}120\text{ Hz}$) and turbulent air roar ($95\text{--}114\text{ dBA}$ sound power at the plant).
 * **The Community Conflict:** In suburban hubs like **Loudoun County, VA ("Data Center Alley")**, Chandler, AZ, and Dublin, Ireland, residents living within $250\text{--}600\text{m}$ suffer sleep deprivation, leading to municipal lawsuits and zoning moratoriums. Most local ordinances enforce strict nighttime limits of **$40\text{--}45\text{ dBA}$ at the property line**.
-* **The Solution:** A **"Tony Stark" Spatial Digital Twin** that simulates site layout, subterranean chiller placement, high-absorption perimeter walls, and native regional bio-acoustic buffers *before* and *after* construction, paired with autonomous cross-fleet night-curfew workload balancing.
+* **The Solution:** An **Architectural AeroAcoustic Spatial Digital Twin** that simulates site layout, subterranean chiller placement, high-absorption perimeter walls, and native regional bio-acoustic buffers *before* and *after* construction, paired with autonomous cross-fleet night-curfew workload balancing.
 
 ---
 

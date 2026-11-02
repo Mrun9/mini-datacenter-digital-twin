@@ -99,14 +99,14 @@ function TerrainBackdrop({ terrainType }) {
 
 /**
  * Realistic Hyperscale Data Center Building
- * Supports Iron Man Exploded View ("Stark Mode")
+ * Supports Architectural Exploded View (Subsystem Disassembly)
  */
 function DataCenterBuilding({ explodedProgress = 0 }) {
   const roofLift = 14 * explodedProgress;
   const wallSpread = 7 * explodedProgress;
 
-  // Floating Stark HUD texture
-  const starkHudTexture = useMemo(() => {
+  // Floating Subsystem Disassembly HUD texture
+  const explodedHudTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 128;
@@ -125,7 +125,7 @@ function DataCenterBuilding({ explodedProgress = 0 }) {
     ctx.textAlign = "center";
     ctx.font = "bold 26px sans-serif";
     ctx.fillStyle = "#38bdf8";
-    ctx.fillText("⚡ STARK HOLOGRAPHIC DISASSEMBLY", 256, 42);
+    ctx.fillText("FACILITY SUBSYSTEM DISASSEMBLY", 256, 42);
 
     ctx.font = "20px monospace";
     ctx.fillStyle = "#67e8f9";
@@ -133,12 +133,12 @@ function DataCenterBuilding({ explodedProgress = 0 }) {
 
     ctx.font = "16px sans-serif";
     ctx.fillStyle = "#94a3b8";
-    ctx.fillText("INTERNAL CORE REVEALED", 256, 112);
+    ctx.fillText("INTERNAL STRUCTURAL CORE REVEALED", 256, 112);
 
     return new CanvasTexture(canvas);
   }, []);
 
-  useEffect(() => () => starkHudTexture.dispose(), [starkHudTexture]);
+  useEffect(() => () => explodedHudTexture.dispose(), [explodedHudTexture]);
 
   return (
     <group position={[-18, 0, 0]}>
@@ -210,7 +210,7 @@ function DataCenterBuilding({ explodedProgress = 0 }) {
       </group>
 
       {/* =========================================
-          EXTERIOR TILT-UP CONCRETE WALLS (DISASSEMBLED IN STARK MODE)
+          EXTERIOR TILT-UP CONCRETE WALLS (DISASSEMBLED IN EXPLODED VIEW)
           ========================================= */}
       {/* Front Wall (Facing Chiller Yard +X) */}
       <group position={[14 + wallSpread, 5.5, 0]}>
@@ -292,10 +292,10 @@ function DataCenterBuilding({ explodedProgress = 0 }) {
           <meshStandardMaterial color="#475569" wireframe={explodedProgress > 0.4} />
         </mesh>
 
-        {/* Holographic Projection Marker in Stark Mode */}
+        {/* Holographic Projection Marker in Exploded View */}
         {explodedProgress > 0.25 && (
           <sprite position={[0, 5, 0]} scale={[12, 3, 1]}>
-            <spriteMaterial map={starkHudTexture} depthTest={false} transparent opacity={0.9} />
+            <spriteMaterial map={explodedHudTexture} depthTest={false} transparent opacity={0.9} />
           </sprite>
         )}
       </group>
@@ -333,7 +333,7 @@ function DataCenterBuilding({ explodedProgress = 0 }) {
 
 /**
  * 400-ton Industrial V-Bank Air-Cooled Chiller Unit
- * Supports Iron Man component disassembly
+ * Supports architectural component disassembly
  */
 function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress = 0 }) {
   const fans = [useRef(), useRef(), useRef(), useRef()];
@@ -365,7 +365,7 @@ function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress
         </mesh>
       </group>
 
-      {/* 2. Slanted V-Bank Condenser Coils (Separates outward in Stark mode) */}
+      {/* 2. Slanted V-Bank Condenser Coils (Separates outward in exploded view) */}
       {/* Left Coil Bank */}
       <mesh
         position={[-0.7 - coilSpread, 2.2 + 1.5 * explodedProgress, 0]}
@@ -389,7 +389,7 @@ function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress
         <meshStandardMaterial color="#0f172a" />
       </mesh>
 
-      {/* 4. Four Upward-Blowing Axial Condenser Fans (Levitate high in Stark mode) */}
+      {/* 4. Four Upward-Blowing Axial Condenser Fans (Elevated in exploded view) */}
       {[-1.8, -0.6, 0.6, 1.8].map((z, idx) => (
         <group key={z} position={[0, 3.35 + fanLift, z]}>
           {/* Fan Cowling Cylinder */}
@@ -967,7 +967,7 @@ export default function AcousticSiteSandbox3D({
   itPowerKw,
   fanSpeedPercent,
 }) {
-  // Iron Man Exploded View State (0 = collapsed, 1 = fully exploded)
+  // Architectural Exploded View State (0 = collapsed, 1 = fully exploded)
   const [explodedProgress, setExplodedProgress] = useState(0);
   const [isExplodingAuto, setIsExplodingAuto] = useState(false);
 
@@ -1086,7 +1086,7 @@ export default function AcousticSiteSandbox3D({
     <div className="site-canvas-supercontainer" style={{ position: "relative", width: "100%" }}>
       {/* 3D Viewport Controls HUD Overlay (Top-Left) */}
       <div className="canvas-hud-toolbar">
-        {/* Stark Exploded View Controls */}
+        {/* Exploded Subsystem View Controls */}
         <div className="hud-pill-group">
           <button
             className={`hud-btn ${explodedProgress > 0 ? "active" : ""}`}
@@ -1094,10 +1094,10 @@ export default function AcousticSiteSandbox3D({
               setIsExplodingAuto(false);
               setExplodedProgress(explodedProgress > 0 ? 0 : 1);
             }}
-            title="Toggle Iron Man Exploded Hologram"
+            title="Toggle Exploded Subsystem Assembly View"
           >
-            <span className="hud-icon">⚡</span>
-            <span>Iron Man Exploded View: {Math.round(explodedProgress * 100)}%</span>
+            <span className="hud-icon">📐</span>
+            <span>Exploded View: {Math.round(explodedProgress * 100)}%</span>
           </button>
 
           <input
@@ -1111,13 +1111,13 @@ export default function AcousticSiteSandbox3D({
               setExplodedProgress(parseFloat(e.target.value));
             }}
             className="hud-slider"
-            title="Slide to explode/reassemble building and chillers"
+            title="Slide to separate architectural shell and mechanical cooling subsystems"
           />
 
           <button
             className={`hud-btn-mini ${isExplodingAuto ? "playing" : ""}`}
             onClick={() => setIsExplodingAuto(!isExplodingAuto)}
-            title="Auto-Animate Stark Disassembly"
+            title="Auto-Animate Subsystem Disassembly"
           >
             {isExplodingAuto ? "⏹ Pause" : "▶ Animate"}
           </button>
