@@ -32,6 +32,20 @@ class AcousticEarSimulator {
     this.ambientFilter = null;
 
     this.currentDba = 55;
+    this.timeOfDay = "night";
+  }
+
+  setTimeOfDay(timeOfDay) {
+    this.timeOfDay = timeOfDay;
+    if (!this.audioCtx || !this.ambientGain) return;
+    const now = this.audioCtx.currentTime;
+    if (timeOfDay === "day") {
+      // Daytime traffic wash & ambient bustle masks chiller hum
+      this.ambientGain.gain.setTargetAtTime(0.22, now, 0.2);
+    } else {
+      // Nighttime quiet suburban calm
+      this.ambientGain.gain.setTargetAtTime(0.04, now, 0.2);
+    }
   }
 
   init() {

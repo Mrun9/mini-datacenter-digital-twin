@@ -221,38 +221,60 @@ export function evaluateSiteAcoustics({
   fanSpeedPercent = 75,
   distanceToHomesMeters = 320,
   municipalNoiseLimitDba = 45,
+  daytimeNoiseLimitDba = 55,
+  timeOfDay = "night", // "day" | "night"
   terrainEchoDb = 0.0,
   chillerPlacement = "surface",
   wallHeightMeters = 8,
   wallMaterial = "absorptive_metal",
   wallEnabled = true,
+  wallEnclosure = "single_east", // "single_east" | "u_shape" | "full_4side"
   treeBufferDepthMeters = 25,
   treeSpeciesId = "virginia_pine",
   treeEnabled = true,
+  treeArrangement = "east_buffer", // "east_buffer" | "perimeter_ring"
   chillerOrientationAngle = 90, // Degrees away from residential zone (0 - 180)
+  acousticSilencers = false, // High-performance compressor sound blankets & intake silencers
 }) {
   // 1. Source Sound Power Level
-  const sourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  let rawSourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  if (acousticSilencers) {
+    rawSourceLw -= 5.5; // Acoustic silencers and compressor blankets
+  }
+  const sourceLw = rawSourceLw;
 
   // 2. Free-field Geometric Distance Spreading (ISO 9613-2 hemispherical point source)
   // Lp_free = Lw - 20 * log10(d) - 11
   const effectiveDistance = Math.max(10, distanceToHomesMeters);
   const geometricDecay = 20 * Math.log10(effectiveDistance) + 11.0;
 
-  // Unmitigated sound level at receiver
-  const unmitigatedLp = Math.max(30, sourceLw - geometricDecay + terrainEchoDb);
+  // 3. Atmospheric and Day/Night Inversion effects:
+  // At night, cool air near the ground and warm air aloft causes a thermal inversion,
+  // bending acoustic waves back down toward the ground (+1.8 dB propagation boost).
+  // In the daytime, solar heating creates upward lapse, attenuating sound (-1.2 dB).
+  const atmosphericInversionDb = timeOfDay === "night" ? 1.8 : -1.2;
 
-  // 3. Mitigations
+  // Unmitigated sound level at receiver
+  const unmitigatedLp = Math.max(30, sourceLw - geometricDecay + terrainEchoDb + atmosphericInversionDb);
+
+  // 4. Mitigations
   const placementData = calculatePlacementAttenuation(chillerPlacement);
   const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, effectiveDistance, wallEnabled);
   const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+
+  // Enclosure bonus: U-shape or 4-sided enclosure traps sound
+  let enclosureBonus = 0;
+  if (wallEnabled && wallHeightMeters >= 4) {
+    if (wallEnclosure === "full_4side") enclosureBonus = 3.5;
+    else if (wallEnclosure === "u_shape") enclosureBonus = 2.0;
+  }
 
   // Directivity attenuation: Directing louvers/exhaust 90° - 180° away from homes gives 2 - 5 dB
   const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
 
   // Total Mitigated Attenuation:
   // When underground, wall and directivity have diminishing marginal returns
-  let effectiveWallAtten = wallData.attenuationDb;
+  let effectiveWallAtten = wallData.attenuationDb + enclosureBonus;
   let effectiveDirectivity = directivityAttenuation;
   if (chillerPlacement === "underground") {
     effectiveWallAtten *= 0.25; // Wall mostly shields remaining exhaust stack
@@ -267,14 +289,20 @@ export function evaluateSiteAcoustics({
     treeData.attenuationDb +
     effectiveDirectivity;
 
-  // Net Sound Pressure Level (Lp) at the residential receptor
-  // Environmental floor ambient is around 32 dBA in quiet suburban/rural settings
-  const backgroundNoiseFloor = 32.0;
-  const rawReceivedLp = sourceLw - geometricDecay + terrainEchoDb - totalMitigationDb;
+  // 5. Ambient Background Noise Floor & Time-of-Day Law:
+  // Day ambient: ~50-52 dBA (arterial traffic, lawnmowers, birds, human bustle)
+  // Night ambient: ~30-32 dBA (quiet nocturnal suburban calm)
+  const backgroundNoiseFloor = timeOfDay === "day" ? 52.0 : 32.0;
+  const activeLegalLimit = timeOfDay === "day" ? (daytimeNoiseLimitDba || municipalNoiseLimitDba + 10) : municipalNoiseLimitDba;
+
+  const rawReceivedLp = sourceLw - geometricDecay + terrainEchoDb + atmosphericInversionDb - totalMitigationDb;
   const netReceivedLp = 10 * Math.log10(10 ** (backgroundNoiseFloor / 10) + 10 ** (Math.max(15, rawReceivedLp) / 10));
 
+  // Signal-to-Noise Ratio (SNR) above ambient
+  const snrAboveAmbient = Math.max(0, rawReceivedLp - backgroundNoiseFloor);
+
   // Compliance analysis
-  const marginDb = municipalNoiseLimitDba - netReceivedLp;
+  const marginDb = activeLegalLimit - netReceivedLp;
   const isCompliant = marginDb >= 0;
 
   // Severity category
@@ -292,8 +320,6 @@ export function evaluateSiteAcoustics({
   }
 
   // Low-frequency tonal hum (dBC):
-  // At 60 - 120 Hz compressor drone, sound travels further with lower air absorption.
-  // Loudoun County and European environmental agencies track dBC because low frequencies rattle walls.
   const lowFreqBonus =
     chillerPlacement === "underground"
       ? 5.0
@@ -310,7 +336,11 @@ export function evaluateSiteAcoustics({
     netReceivedLpC,
     lowFreqExcess,
     noiseReductionDb: Math.round((unmitigatedLp - netReceivedLp) * 10) / 10,
-    municipalNoiseLimitDba,
+    municipalNoiseLimitDba: activeLegalLimit,
+    activeLegalLimit,
+    timeOfDay,
+    backgroundNoiseFloor,
+    snrAboveAmbient: Math.round(snrAboveAmbient * 10) / 10,
     marginDb: Math.round(marginDb * 10) / 10,
     isCompliant,
     complianceStatus,
@@ -318,6 +348,7 @@ export function evaluateSiteAcoustics({
     breakdown: {
       geometricDecay: Math.round(geometricDecay * 10) / 10,
       terrainEchoDb: Math.round(terrainEchoDb * 10) / 10,
+      inversionEffect: Math.round(atmosphericInversionDb * 10) / 10,
       placementAttenuation: Math.round(placementData.attenuationDb * 10) / 10,
       wallAttenuation: Math.round(effectiveWallAtten * 10) / 10,
       treeAttenuation: Math.round(treeData.attenuationDb * 10) / 10,
@@ -325,12 +356,173 @@ export function evaluateSiteAcoustics({
       totalMitigationDb: Math.round(totalMitigationDb * 10) / 10,
     },
     economics: {
-      wallCostEstimate: wallData.costEstimate,
-      wallEmbodiedCarbonKg: wallData.embodiedCarbonKg,
-      treeAnnualMaintenanceCost: treeData.annualMaintenanceCost,
-      treeAnnualWaterGallons: treeData.annualWaterGallons,
-      treeAnnualCo2Kg: treeData.annualCo2Kg,
+      wallCostEstimate: wallData.costEstimate * (wallEnclosure === "full_4side" ? 2.5 : wallEnclosure === "u_shape" ? 1.8 : 1.0),
+      wallEmbodiedCarbonKg: wallData.embodiedCarbonKg * (wallEnclosure === "full_4side" ? 2.5 : wallEnclosure === "u_shape" ? 1.8 : 1.0),
+      treeAnnualMaintenanceCost: treeData.annualMaintenanceCost * (treeArrangement === "perimeter_ring" ? 2.2 : 1.0),
+      treeAnnualWaterGallons: treeData.annualWaterGallons * (treeArrangement === "perimeter_ring" ? 2.2 : 1.0),
+      treeAnnualCo2Kg: treeData.annualCo2Kg * (treeArrangement === "perimeter_ring" ? 2.2 : 1.0),
       capexMultiplier: placementData.capexMultiplier,
     },
   };
+}
+
+/**
+ * Calculates noise level at an arbitrary probe distance in meters.
+ */
+export function calculateNoiseAtPoint({
+  probeDistanceMeters = 100,
+  itPowerKw = 500,
+  ambientTempC = 22,
+  fanSpeedPercent = 75,
+  terrainEchoDb = 0.0,
+  chillerPlacement = "surface",
+  wallHeightMeters = 8,
+  wallMaterial = "absorptive_metal",
+  wallEnabled = true,
+  wallEnclosure = "single_east",
+  treeBufferDepthMeters = 25,
+  treeSpeciesId = "virginia_pine",
+  treeEnabled = true,
+  chillerOrientationAngle = 90,
+  municipalNoiseLimitDba = 45,
+  timeOfDay = "night",
+  acousticSilencers = false,
+}) {
+  const d = Math.max(2, probeDistanceMeters);
+  let rawSourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  if (acousticSilencers) rawSourceLw -= 5.5;
+  const sourceLw = rawSourceLw;
+
+  const geometricDecay = 20 * Math.log10(d) + 11.0;
+  const atmosphericInversionDb = timeOfDay === "night" ? 1.8 : -1.2;
+
+  // Evaluate mitigations
+  const placementData = calculatePlacementAttenuation(chillerPlacement);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, d, wallEnabled);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
+
+  let enclosureBonus = 0;
+  if (wallEnabled && wallHeightMeters >= 4) {
+    if (wallEnclosure === "full_4side") enclosureBonus = 3.5;
+    else if (wallEnclosure === "u_shape") enclosureBonus = 2.0;
+  }
+
+  let effectiveWallAtten = wallData.attenuationDb + enclosureBonus;
+  let effectiveDirectivity = directivityAttenuation;
+  if (chillerPlacement === "underground") {
+    effectiveWallAtten *= 0.25;
+    effectiveDirectivity *= 0.5;
+  } else if (chillerPlacement === "semi_berm") {
+    effectiveWallAtten *= 0.85;
+  }
+
+  // If probe is closer than wall (e.g. < 15m), wall doesn't attenuate
+  if (d < 18) {
+    effectiveWallAtten = 0;
+  }
+  // If probe is closer than tree buffer (e.g. < 25m), trees don't attenuate
+  if (d < 25) {
+    treeData.attenuationDb = 0;
+  }
+
+  const totalMitigationDb =
+    placementData.attenuationDb +
+    effectiveWallAtten +
+    treeData.attenuationDb +
+    effectiveDirectivity;
+
+  const backgroundNoiseFloor = timeOfDay === "day" ? 52.0 : 32.0;
+  const rawReceivedLp = sourceLw - geometricDecay + terrainEchoDb + atmosphericInversionDb - totalMitigationDb;
+  const netReceivedLp = 10 * Math.log10(10 ** (backgroundNoiseFloor / 10) + 10 ** (Math.max(15, rawReceivedLp) / 10));
+
+  const marginDb = municipalNoiseLimitDba - netReceivedLp;
+  const isCompliant = marginDb >= 0;
+
+  const lowFreqBonus =
+    chillerPlacement === "underground"
+      ? 5.0
+      : chillerPlacement === "rear_shielded"
+      ? 9.5
+      : 14.5;
+  const netReceivedLpC = Math.round((netReceivedLp + lowFreqBonus) * 10) / 10;
+
+  let sensation = "Quiet Environment";
+  if (netReceivedLp > 75) sensation = "Intense Plant Machinery Roar";
+  else if (netReceivedLp > 65) sensation = "Loud Industrial Compressor Noise";
+  else if (netReceivedLp > 50) sensation = "Audible Continuous Hum";
+  else if (netReceivedLp > 42) sensation = "Low Background Whine";
+  else sensation = "Quiet Sleep Sanctuary (Compliant)";
+
+  return {
+    distanceMeters: Math.round(d),
+    netDba: Math.round(netReceivedLp * 10) / 10,
+    netDbc: netReceivedLpC,
+    marginDb: Math.round(marginDb * 10) / 10,
+    isCompliant,
+    sensation,
+  };
+}
+
+/**
+ * Calculates isophone radii (meters) for concentric noise circles.
+ */
+export function calculateIsophoneRadii({
+  targetDbaLevels = [75, 65, 55, 45, 40],
+  itPowerKw = 500,
+  ambientTempC = 22,
+  fanSpeedPercent = 75,
+  terrainEchoDb = 0.0,
+  chillerPlacement = "surface",
+  wallHeightMeters = 8,
+  wallMaterial = "absorptive_metal",
+  wallEnabled = true,
+  wallEnclosure = "single_east",
+  treeBufferDepthMeters = 25,
+  treeSpeciesId = "virginia_pine",
+  treeEnabled = true,
+  chillerOrientationAngle = 90,
+  timeOfDay = "night",
+  acousticSilencers = false,
+}) {
+  let rawSourceLw = calculateChillerSoundPower(itPowerKw, ambientTempC, fanSpeedPercent);
+  if (acousticSilencers) rawSourceLw -= 5.5;
+  const sourceLw = rawSourceLw;
+  const atmosphericInversionDb = timeOfDay === "night" ? 1.8 : -1.2;
+
+  const placementData = calculatePlacementAttenuation(chillerPlacement);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, 300, wallEnabled);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
+
+  let enclosureBonus = 0;
+  if (wallEnabled && wallHeightMeters >= 4) {
+    if (wallEnclosure === "full_4side") enclosureBonus = 3.5;
+    else if (wallEnclosure === "u_shape") enclosureBonus = 2.0;
+  }
+
+  let effectiveWallAtten = wallData.attenuationDb + enclosureBonus;
+  let effectiveDirectivity = directivityAttenuation;
+  if (chillerPlacement === "underground") {
+    effectiveWallAtten *= 0.25;
+    effectiveDirectivity *= 0.5;
+  } else if (chillerPlacement === "semi_berm") {
+    effectiveWallAtten *= 0.85;
+  }
+
+  const totalMitigationDb =
+    placementData.attenuationDb +
+    effectiveWallAtten +
+    treeData.attenuationDb +
+    effectiveDirectivity;
+
+  return targetDbaLevels.map((targetDba) => {
+    // d = 10^((Lw - 11 + terrainEcho + atmosphericInversion - totalMitigation - targetDba) / 20)
+    const exponent = (sourceLw - 11.0 + terrainEchoDb + atmosphericInversionDb - totalMitigationDb - targetDba) / 20.0;
+    const radiusMeters = Math.max(3, Math.min(1200, Math.pow(10, exponent)));
+    return {
+      targetDba,
+      radiusMeters: Math.round(radiusMeters),
+    };
+  });
 }

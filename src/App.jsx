@@ -3,7 +3,10 @@ import { Simulation } from "./simulation/Simulation.js";
 import { powerWatts, totalNoiseDba } from "./simulation/physics.js";
 import { DATA_CENTER_SITES } from "./simulation/datacenterSites.js";
 import { evaluateSiteAcoustics } from "./simulation/acoustics.js";
-import SiteFleetSelector from "./components/SiteFleetSelector.jsx";
+
+import Header from "./components/Header.jsx";
+import LandingPage from "./components/LandingPage.jsx";
+import Footer from "./components/Footer.jsx";
 import AcousticControls from "./components/AcousticControls.jsx";
 import FleetComparisonView from "./components/FleetComparisonView.jsx";
 import ServerControls from "./components/ServerControls.jsx";
@@ -16,14 +19,15 @@ const AcousticSiteSandbox3D = lazy(() => import("./components/AcousticSiteSandbo
 import "./styles.css";
 
 export default function App() {
-  // Keep one model across React renders
+  // Single physics simulation instance
   const simulation = useRef(null);
   if (!simulation.current) simulation.current = new Simulation();
 
   const [selectedServerId, setSelectedServerId] = useState(1);
   const [running, setRunning] = useState(true);
-  const [tab, setTab] = useState("site"); // "site" | "fleet" | "indoor"
+  const [tab, setTab] = useState("site"); // "site" | "fleet" | "indoor" | "landing"
   const [viewportMode, setViewportMode] = useState("twin"); // "twin" | "satellite" | "split"
+  const [timeOfDay, setTimeOfDay] = useState("night"); // "day" | "night"
   const [, refresh] = useState(0);
   const redraw = () => refresh((value) => value + 1);
 
@@ -80,17 +84,22 @@ export default function App() {
       fanSpeedPercent,
       distanceToHomesMeters: activeSite.defaultDistanceToHomesMeters,
       municipalNoiseLimitDba: activeSite.municipalNoiseLimitDba,
+      daytimeNoiseLimitDba: activeSite.daytimeNoiseLimitDba || 55,
+      timeOfDay,
       terrainEchoDb: activeSite.terrainEchoAmplificationDb,
       chillerPlacement: activeConfig.placement,
       wallHeightMeters: activeConfig.wallHeightMeters,
       wallMaterial: activeConfig.wallMaterial,
       wallEnabled: activeConfig.wallEnabled,
+      wallEnclosure: activeConfig.wallEnclosure || "single_east",
       treeBufferDepthMeters: activeConfig.treeBufferDepthMeters,
       treeSpeciesId: activeConfig.treeSpeciesId,
       treeEnabled: activeConfig.treeEnabled,
+      treeArrangement: activeConfig.treeArrangement || "east_buffer",
       chillerOrientationAngle: activeConfig.chillerOrientationAngle,
+      acousticSilencers: activeConfig.acousticSilencers || false,
     });
-  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig]);
+  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, timeOfDay]);
 
   const age = model.timeSeconds - model.twin.lastMeasurementSeconds;
   const maxGap = Math.max(
@@ -110,290 +119,241 @@ export default function App() {
   );
 
   return (
-    <main className="app-shell">
-      {/* Top Header */}
-      <header>
-        <div className="brand-icon">🌐</div>
-        <div>
-          <div className="eyebrow">INNOVATION CLASS PROTOTYPE / AEROACOUSTIC DIGITAL TWIN</div>
-          <h1>
-            AeroAcoustic <span>Data Center Site Twin</span>
-          </h1>
-        </div>
-        <div className="local-badge">
-          <i />
-          Spatial Simulation & Web Audio
-        </div>
-      </header>
-
-      {/* Global Site Selector Bar */}
-      <SiteFleetSelector
+    <div className="hushgrid-app">
+      {/* 1. Header with Logo 'HushGrid', Site Dropdown, Navigation & Sim Control */}
+      <Header
+        activeTab={tab}
+        onSelectTab={setTab}
         selectedSiteId={selectedSiteId}
         onSelectSite={setSelectedSiteId}
-        evaluation={acousticResults}
+        acousticResults={acousticResults}
+        running={running}
+        onToggleRunning={() => setRunning(!running)}
+        simulationTimeSeconds={model.timeSeconds}
       />
 
-      {/* Intro Subtitle & Time Clock */}
-      <div className="intro">
-        <p>
-          Tackling data center community noise pollution through spatial digital twin architecture.
-          <br />
-          <span>
-            Simulate subterranean chiller placement, high-absorption acoustic walls, and native regional bio-buffers.
-          </span>
-        </p>
-        <div className="clock">
-          <span>SIMULATION TIME</span>
-          <b>
-            {model.timeSeconds.toFixed(1)}
-            <small> sec</small>
-          </b>
-        </div>
-      </div>
-
-      {/* Main Tab Navigation */}
-      <nav aria-label="Views">
-        <button
-          className={tab === "site" ? "active" : ""}
-          onClick={() => setTab("site")}
-        >
-          01 <span>3D Acoustic Site Twin</span>
-        </button>
-        <button
-          className={tab === "fleet" ? "active" : ""}
-          onClick={() => setTab("fleet")}
-        >
-          02 <span>Global Fleet & Night Curfew</span>
-        </button>
-        <button
-          className={tab === "indoor" ? "active" : ""}
-          onClick={() => setTab("indoor")}
-        >
-          03 <span>Indoor Racks & Telemetry</span>
-        </button>
-      </nav>
-
-      {/* Toolbar Controls */}
-      <div className="toolbar">
-        <div className="playback">
-          <button
-            className="primary"
-            disabled={running}
-            onClick={() => setRunning(true)}
-          >
-            ▶ Start
-          </button>
-          <button disabled={!running} onClick={() => setRunning(false)}>
-            Ⅱ Pause
-          </button>
-          <button
-            onClick={() => {
-              setRunning(false);
-              simulation.current = new Simulation();
-              redraw();
-            }}
-          >
-            ↺ Reset
-          </button>
-          <span className="muted">{running ? "Running" : "Paused"}</span>
-        </div>
-
-        <div className="facility-status-strip">
-          <span className="muted">Active Site: <strong>{activeSite.name}</strong></span>
-          <span className="muted">Facility IT Load: <strong>{itPowerKw} kW</strong></span>
-          <span className="muted">Outdoor Temp: <strong>{activeSite.ambientTempC}°C</strong></span>
-        </div>
-
-        <label className="sensor-toggle">
-          <input
-            type="checkbox"
-            checked={model.sensor.connected}
-            onChange={(e) => {
-              model.sensor.connected = e.target.checked;
-              redraw();
+      <main className="app-main-content">
+        {/* VIEW 0: LANDING PAGE (Overview & Map of How This Works) */}
+        {tab === "landing" && (
+          <LandingPage
+            onSelectSite={(id) => setSelectedSiteId(id)}
+            onNavigateToTwin={(id) => {
+              if (id) setSelectedSiteId(id);
+              setTab("site");
             }}
           />
-          Sensors connected{" "}
-          <span className={model.sensor.connected ? "connected" : "disconnected"}>
-            {model.sensor.connected ? "2s sampling" : "Disconnected"}
-          </span>
-        </label>
-      </div>
+        )}
 
-      {/* VIEW 1: 3D ACOUSTIC SITE TWIN & SATELLITE ARCHITECTURE */}
-      {tab === "site" && (
-        <section className="site-tab-view">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">SPATIAL DIGITAL TWIN & REAL-WORLD GROUNDING</span>
-              <h2>{activeSite.name} — {activeSite.realFacilityName || "Acoustic Site Twin"}</h2>
-            </div>
-
-            {/* Viewport Mode Switcher */}
-            <div className="viewport-mode-switcher">
-              <button
-                className={viewportMode === "twin" ? "active" : ""}
-                onClick={() => setViewportMode("twin")}
-              >
-                🧊 3D Twin Sandbox
-              </button>
-              <button
-                className={viewportMode === "satellite" ? "active" : ""}
-                onClick={() => setViewportMode("satellite")}
-              >
-                🛰️ Google Maps Satellite
-              </button>
-              <button
-                className={viewportMode === "split" ? "active" : ""}
-                onClick={() => setViewportMode("split")}
-              >
-                ⚡ Split View (3D + Maps)
-              </button>
-            </div>
-          </div>
-
-          <div className={`viewport-display ${viewportMode === "split" ? "split-mode" : ""}`}>
-            {(viewportMode === "twin" || viewportMode === "split") && (
-              <div className="canvas-wrapper">
-                <Suspense fallback={<div className="loading-canvas">Initializing 3D Spatial Acoustic Scene...</div>}>
-                  <AcousticSiteSandbox3D
-                    site={activeSite}
-                    config={activeConfig}
-                    acousticResults={acousticResults}
-                    running={running}
-                    itPowerKw={itPowerKw}
-                    fanSpeedPercent={fanSpeedPercent}
-                  />
-                </Suspense>
+        {/* VIEW 1: SELECTED SITE 3D TWIN & ACOUSTIC SANDBOX */}
+        {tab === "site" && (
+          <section className="site-tab-view animated-fadeIn">
+            {/* Quick Site Switcher Pills */}
+            <div className="site-quick-switcher-bar">
+              <span className="quick-bar-label">SELECT FACILITY:</span>
+              <div className="quick-pills-list">
+                {DATA_CENTER_SITES.map((site) => {
+                  const isCurrent = site.id === selectedSiteId;
+                  const flag = site.country === "Ireland" ? "🇮🇪" : "🇺🇸";
+                  return (
+                    <button
+                      key={site.id}
+                      className={`quick-pill-btn ${isCurrent ? "active" : ""}`}
+                      onClick={() => setSelectedSiteId(site.id)}
+                    >
+                      <span className="pill-flag">{flag}</span>
+                      <span className="pill-name">{site.name}</span>
+                      <span className="pill-terrain">{site.terrainLabel}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
 
-            {(viewportMode === "satellite" || viewportMode === "split") && (
-              <div className="satellite-wrapper">
-                <SatelliteArchitectureInspector site={activeSite} />
+            {/* Site Title Banner & Quick Metadata */}
+            <div className="site-view-header">
+              <div className="site-title-column">
+                <div className="site-eyebrow-row">
+                  <span className="eyebrow">SPATIAL DIGITAL TWIN · 3D FACILITY GROUNDING</span>
+                  <span
+                    className="site-status-pill animate-pulse-badge"
+                    style={{
+                      background: `${acousticResults.statusColor}22`,
+                      color: acousticResults.statusColor,
+                      borderColor: `${acousticResults.statusColor}66`,
+                    }}
+                  >
+                    ● {acousticResults.complianceStatus} ({acousticResults.netReceivedLp.toFixed(1)} dBA at {activeSite.defaultDistanceToHomesMeters}m)
+                  </span>
+                </div>
+                <h2>
+                  {activeSite.name} <span className="sub-facility">— {activeSite.realFacilityName || "Hyperscale Campus"}</span>
+                </h2>
+                <p className="site-address-sub">
+                  📍 {activeSite.realAddress || activeSite.coordinates} · Terrain: <strong>{activeSite.terrainLabel}</strong> · Ambient: <strong>{activeSite.ambientTempC}°C</strong>
+                </p>
               </div>
-            )}
-          </div>
 
-          <p className="room-caption">
-            🔴 Red Ring: Severe noise impact (&gt;65 dBA) · 🟡 Amber Ring: Community nuisance (&gt;50 dBA) · 🟢 Green Marker: {activeSite.municipalNoiseLimitDba} dBA Legal Night Limit
-            <br />
-            Subterranean bunker placement, higher walls, and dense native tree buffers shrink the acoustic rings back toward the plant.
-          </p>
-
-          <AcousticControls
-            site={activeSite}
-            config={activeConfig}
-            onChangeConfig={handleUpdateConfig}
-            results={acousticResults}
-            fanSpeedPercent={fanSpeedPercent}
-            onChangeFanSpeed={setFanSpeedPercent}
-          />
-        </section>
-      )}
-
-      {/* VIEW 2: GLOBAL FLEET & LOAD SHIFTING */}
-      {tab === "fleet" && (
-        <FleetComparisonView
-          sites={DATA_CENTER_SITES}
-          selectedSiteId={selectedSiteId}
-          onSelectSite={(id) => {
-            setSelectedSiteId(id);
-            setTab("site");
-          }}
-          siteConfigs={siteConfigs}
-          itPowerKw={itPowerKw}
-          fanSpeedPercent={fanSpeedPercent}
-        />
-      )}
-
-      {/* VIEW 3: INDOOR COMPUTE RACKS & TELEMETRY */}
-      {tab === "indoor" && (
-        <>
-          <section className="metrics">
-            <div>
-              <span>Indoor IT Power</span>
-              <strong>
-                {physical.reduce((sum, s) => sum + powerWatts(s), 0).toFixed(0)}
-                <small> W</small>
-              </strong>
-              <p>Drives outdoor chiller demand</p>
+              {/* Viewport Mode Switcher (3D Twin, Google Maps Satellite, Split View) */}
+              <div className="viewport-mode-switcher">
+                <button
+                  className={viewportMode === "twin" ? "active" : ""}
+                  onClick={() => setViewportMode("twin")}
+                >
+                  🧊 3D Twin Sandbox
+                </button>
+                <button
+                  className={viewportMode === "satellite" ? "active" : ""}
+                  onClick={() => setViewportMode("satellite")}
+                >
+                  🛰️ Google Maps Satellite
+                </button>
+                <button
+                  className={viewportMode === "split" ? "active" : ""}
+                  onClick={() => setViewportMode("split")}
+                >
+                  ⚡ Split View (3D + Maps)
+                </button>
+              </div>
             </div>
-            <div>
-              <span>Indoor Server Fan Noise</span>
-              <strong>
-                {totalNoiseDba(physical).toFixed(1)}
-                <small> dBA</small>
-              </strong>
-              <p>Inside server hall</p>
-            </div>
-            <div>
-              <span>Largest Twin Deviation</span>
-              <strong>
-                {maxGap.toFixed(1)}
-                <small> °C</small>
-              </strong>
-              <p>Physical vs estimated</p>
-            </div>
-            <div>
-              <span>Last Sensor Update</span>
-              <strong>
-                {age.toFixed(1)}
-                <small> sec ago</small>
-              </strong>
-              <p>
-                {model.twin.lastMeasurementSeconds === 0
-                  ? "Initialized at t = 0"
-                  : `Sampled at t = ${model.twin.lastMeasurementSeconds.toFixed(1)}s`}
-              </p>
-            </div>
-          </section>
 
-          {!model.sensor.connected && (
-            <div className="notice">
-              Sensors disconnected. The twin keeps estimating from its last reading.
-              Change CPU load or disable a fan to observe divergence.
+            {/* Viewport Display: 3D Canvas and/or Satellite Map */}
+            <div className={`viewport-display ${viewportMode === "split" ? "split-mode" : ""}`}>
+              {(viewportMode === "twin" || viewportMode === "split") && (
+                <div className="canvas-wrapper">
+                  <Suspense fallback={<div className="loading-canvas">Initializing 3D Spatial Acoustic Scene...</div>}>
+                    <AcousticSiteSandbox3D
+                      site={activeSite}
+                      config={activeConfig}
+                      acousticResults={acousticResults}
+                      running={running}
+                      itPowerKw={itPowerKw}
+                      fanSpeedPercent={fanSpeedPercent}
+                      timeOfDay={timeOfDay}
+                      onChangeTimeOfDay={setTimeOfDay}
+                    />
+                  </Suspense>
+                </div>
+              )}
+
+              {(viewportMode === "satellite" || viewportMode === "split") && (
+                <div className="satellite-wrapper">
+                  <SatelliteArchitectureInspector site={activeSite} />
+                </div>
+              )}
             </div>
-          )}
 
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">PHYSICAL RACK COMPUTATION → FACILITY CHILLER COUPLING</span>
-              <h2>Indoor Server Racks (Heat Generation Core)</h2>
-            </div>
-            <span className="muted">Adjusting CPU load increases total heat rejected by outdoor chillers</span>
-          </div>
-
-          <section className="server-grid">
-            {physical.map((s) => controls(s.id))}
-          </section>
-
-          <TemperatureChart history={model.history} />
-
-          <div className="section-heading" style={{ marginTop: "32px" }}>
-            <div>
-              <span className="eyebrow">INDOOR 3D SERVER HALL</span>
-              <h2>Rack-Level Geometry</h2>
-            </div>
-          </div>
-          <Suspense fallback={<p>Loading indoor room...</p>}>
-            <ServerRoom
-              servers={physical}
-              selected={selectedServerId}
-              onSelect={setSelectedServerId}
-              running={running}
+            {/* Engineering Acoustic Controls Panel */}
+            <AcousticControls
+              site={activeSite}
+              config={activeConfig}
+              onChangeConfig={handleUpdateConfig}
+              results={acousticResults}
+              fanSpeedPercent={fanSpeedPercent}
+              onChangeFanSpeed={setFanSpeedPercent}
+              timeOfDay={timeOfDay}
+              onChangeTimeOfDay={setTimeOfDay}
             />
-          </Suspense>
-        </>
-      )}
+          </section>
+        )}
 
-      <footer>
-        <span>AEROACOUSTIC DATA CENTER DIGITAL TWIN</span>
-        <p>
-          Simulating real-world ISO 9613-2 acoustic propagation, Maekawa barrier insertion loss,
-          and regional bio-acoustic foliage buffering to eliminate community data center noise pollution.
-        </p>
-      </footer>
-    </main>
+        {/* VIEW 2: GLOBAL FLEET & LOAD SHIFTING */}
+        {tab === "fleet" && (
+          <FleetComparisonView
+            sites={DATA_CENTER_SITES}
+            selectedSiteId={selectedSiteId}
+            onSelectSite={(id) => {
+              setSelectedSiteId(id);
+              setTab("site");
+            }}
+            siteConfigs={siteConfigs}
+            itPowerKw={itPowerKw}
+            fanSpeedPercent={fanSpeedPercent}
+          />
+        )}
+
+        {/* VIEW 3: INDOOR COMPUTE RACKS & TELEMETRY */}
+        {tab === "indoor" && (
+          <section className="indoor-tab-view animated-fadeIn">
+            <section className="metrics">
+              <div>
+                <span>Indoor IT Power</span>
+                <strong>
+                  {physical.reduce((sum, s) => sum + powerWatts(s), 0).toFixed(0)}
+                  <small> W</small>
+                </strong>
+                <p>Drives outdoor chiller demand</p>
+              </div>
+              <div>
+                <span>Indoor Server Fan Noise</span>
+                <strong>
+                  {totalNoiseDba(physical).toFixed(1)}
+                  <small> dBA</small>
+                </strong>
+                <p>Inside server hall</p>
+              </div>
+              <div>
+                <span>Largest Twin Deviation</span>
+                <strong>
+                  {maxGap.toFixed(1)}
+                  <small> °C</small>
+                </strong>
+                <p>Physical vs estimated</p>
+              </div>
+              <div>
+                <span>Last Sensor Update</span>
+                <strong>
+                  {age.toFixed(1)}
+                  <small> sec ago</small>
+                </strong>
+                <p>
+                  {model.twin.lastMeasurementSeconds === 0
+                    ? "Initialized at t = 0"
+                    : `Sampled at t = ${model.twin.lastMeasurementSeconds.toFixed(1)}s`}
+                </p>
+              </div>
+            </section>
+
+            {!model.sensor.connected && (
+              <div className="notice">
+                Sensors disconnected. The twin keeps estimating from its last reading.
+                Change CPU load or disable a fan to observe divergence.
+              </div>
+            )}
+
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">PHYSICAL RACK COMPUTATION → FACILITY CHILLER COUPLING</span>
+                <h2>Indoor Server Racks (Heat Generation Core)</h2>
+              </div>
+              <span className="muted">Adjusting CPU load increases total heat rejected by outdoor chillers</span>
+            </div>
+
+            <section className="server-grid">
+              {physical.map((s) => controls(s.id))}
+            </section>
+
+            <TemperatureChart history={model.history} />
+
+            <div className="section-heading" style={{ marginTop: "32px" }}>
+              <div>
+                <span className="eyebrow">INDOOR 3D SERVER HALL</span>
+                <h2>Rack-Level Geometry</h2>
+              </div>
+            </div>
+            <Suspense fallback={<p>Loading indoor room...</p>}>
+              <ServerRoom
+                servers={physical}
+                selected={selectedServerId}
+                onSelect={setSelectedServerId}
+                running={running}
+              />
+            </Suspense>
+          </section>
+        )}
+      </main>
+
+      {/* 3. Footer with APIs used, created by, standards, etc. */}
+      <Footer />
+    </div>
   );
 }
