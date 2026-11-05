@@ -10,8 +10,8 @@ An interactive, browser-only spatial digital twin platform designed to **simulat
 ## 🎯 Innovation Need Statement & Problem Context
 
 Data center noise pollution has emerged as a critical environmental and legal conflict:
-* **The Culprit:** Outdoor mechanical chillers, cooling towers, and CRAH exhaust fans emit continuous $24/7$ low-frequency hums ($60\text{--}120\text{ Hz}$) and turbulent air roar ($95\text{--}114\text{ dBA}$ sound power at the plant).
-* **The Community Conflict:** In suburban hubs like **Loudoun County, VA ("Data Center Alley")**, Chandler, AZ, and Dublin, Ireland, residents living within $250\text{--}600\text{m}$ suffer sleep deprivation, leading to municipal lawsuits and zoning moratoriums. Most local ordinances enforce strict nighttime limits of **$40\text{--}45\text{ dBA}$ at the property line**.
+* **The Culprit:** Outdoor mechanical chillers, cooling towers, and CRAH exhaust fans emit continuous 24/7 low-frequency hums (60–120 Hz) and turbulent air roar (95–114 dBA sound power at the plant).
+* **The Community Conflict:** In suburban hubs like **Loudoun County, VA ("Data Center Alley")**, Chandler, AZ, and Dublin, Ireland, residents living within 250–600 m suffer sleep deprivation, leading to municipal lawsuits and zoning moratoriums. Most local ordinances enforce strict nighttime limits of **40–45 dBA at the property line**.
 * **The Solution:** An **Architectural AeroAcoustic Spatial Digital Twin** that simulates site layout, subterranean chiller placement, high-absorption perimeter walls, and native regional bio-acoustic buffers *before* and *after* construction, paired with autonomous cross-fleet night-curfew workload balancing.
 
 ---
@@ -19,9 +19,9 @@ Data center noise pollution has emerged as a critical environmental and legal co
 ## 🚀 Key Prototype Innovations
 
 ### 1. Interactive 3D Spatial Sandbox (`AcousticSiteSandbox3D.jsx`)
-* **Movable Chillers:** Toggle between **Surface Yard** ($0\text{ dB}$ attenuation), **Semi-Bermed Basin** ($-11.5\text{ dB}$), and **Subterranean Bunker Vault** ($-28\text{ dB}$ direct line-of-sight elimination).
-* **Exhaust Baffle Direction:** Rotate cooling exhaust fans away from residential developments ($0^\circ\text{ to }180^\circ$).
-* **Acoustic Barrier Walls:** Drag-and-adjust wall heights from **$2\text{m}$ up to $16\text{m}$** with material physics:
+* **Movable Chillers:** Toggle between **Surface Yard** (0 dB attenuation), **Semi-Bermed Basin** (−11.5 dB), and **Subterranean Bunker Vault** (−28 dB direct line-of-sight elimination).
+* **Exhaust Baffle Direction:** Rotate cooling exhaust fans away from residential developments (0° to 180°).
+* **Acoustic Barrier Walls:** Drag-and-adjust wall heights from **2 m up to 16 m** with material physics:
   * *Perforated Absorptive Metal Composite* (NRC 0.95 — maximum sound absorption)
   * *Dense Precast Concrete* (NRC 0.05 — high mass reflection)
   * *Acoustic Mass Timber* (NRC 0.65 — carbon-negative glulam slats)
@@ -31,7 +31,7 @@ Data center noise pollution has emerged as a critical environmental and legal co
   * *Phoenix, AZ:* Arizona Cypress & Velvet Mesquite (Extreme heat/drought hardy, drip xeriscaping)
   * *Columbia River Gorge, OR:* Western Red Cedar & Douglas Fir (Rain-fed conifer sound screen)
   * *Dublin, Ireland:* Irish Yew & Scots Pine (Damp-tolerant maritime acoustic hedging)
-* **Real-time 3D Acoustic Wave Rings:** Animated isophone rings on the terrain (Red $>65\text{ dBA}$, Amber $>50\text{ dBA}$, Green $<45\text{ dBA}$) that visually shrink back toward the plant as mitigations are applied.
+* **Real-time 3D Acoustic Wave Rings:** Animated isophone rings on the terrain (Red >65 dBA, Amber >50 dBA, Green <45 dBA) that visually shrink back toward the plant as mitigations are applied.
 
 ### 2. Multi-Site Geographic Fleet & "Follow-the-Moon" Load Shifting
 * Compare real-world data centers across different microclimates, terrains (mountain canyon echoes vs flat plains), and legal limits.
@@ -39,7 +39,7 @@ Data center noise pollution has emerged as a critical environmental and legal co
 
 ### 3. Live Web Audio "Ear Simulator" (`audioSynthesizer.js`)
 * Judges and users can click **"Listen at Neighbor's Porch"** to hear a real-time synthesized acoustic environment:
-  * $60\text{ Hz} / 120\text{ Hz}$ harmonic mechanical compressor drone
+  * 60 Hz / 120 Hz harmonic mechanical compressor drone
   * Low-pass filtered turbulent fan airflow rush
   * Dynamic amplitude scaling matching the calculated dBA at the residential property line.
 
@@ -67,11 +67,30 @@ npm run build # Generates production bundle
 
 ## 📐 Scientific & Engineering Foundations
 
-1. **Source Sound Power ($L_w$):** Scaled with compressor compression ratio, ambient temperature penalty, and tip speed:
-   $$L_w = 108.0 + \Delta T_{\text{ambient}} + 18\log_{10}\left(\frac{\text{RPM}}{\text{RPM}_{\text{nom}}}\right) + 10\log_{10}\left(\frac{P_{\text{IT}}}{500}\right)$$
+1. **Source Sound Power ($L_w$):**
+   Scales with compressor compression ratio, ambient temperature penalty, and tip speed:
+
+   $$
+   L_w = 108.0 + \Delta T_{\text{ambient}} + 18\log_{10}\left(\frac{\text{RPM}}{\text{RPM}_{\text{nom}}}\right) + 10\log_{10}\left(\frac{P_{\text{IT}}}{500}\right)
+   $$
+
 2. **Hemispherical Distance Decay (ISO 9613-2):**
-   $$L_p = L_w - 20\log_{10}(d) - 11$$
+   Acoustic geometric spreading over hemispherical terrain:
+
+   $$
+   L_p = L_w - 20\log_{10}(d) - 11
+   $$
+
 3. **Barrier Wall Insertion Loss (Maekawa / Fresnel Diffraction):**
-   $$N = \frac{2}{\lambda}\delta, \quad A_{\text{barrier}} = 10\log_{10}(3 + 20N) + \text{Bonus}_{\text{NRC}}$$
+   Diffraction over perimeter barrier walls with material absorption bonus:
+
+   $$
+   N = \frac{2}{\lambda}\delta, \quad A_{\text{barrier}} = 10\log_{10}(3 + 20N) + \text{Bonus}_{\text{NRC}}
+   $$
+
 4. **Bio-Acoustic Foliage Scattering (ISO 9613-2):**
-   $$A_{\text{veg}} = 12 \cdot \left(1 - \exp\left(-\frac{\alpha \cdot \text{depth}}{10}\right)\right) + A_{\text{porous\_ground}}$$
+   Canopy foliage scattering depth combined with porous ground absorption:
+
+   $$
+   A_{\text{veg}} = 12 \cdot \left(1 - \exp\left(-\frac{\alpha \cdot \text{depth}}{10}\right)\right) + A_{\text{ground}}
+   $$

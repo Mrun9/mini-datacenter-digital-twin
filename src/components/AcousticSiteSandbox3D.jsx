@@ -3,462 +3,637 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, DoubleSide } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../simulation/datacenterSites.js";
-import { calculateNoiseAtPoint, calculateIsophoneRadii } from "../simulation/acoustics.js";
+import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 
 /**
- * Camera Orbit Controls with drag lock
+ * Camera Navigation with Smooth Orbit and Pan
  */
-function SiteCameraControls({ isDragging }) {
+function SiteCameraControls({ navMode, cameraPreset, isDragging }) {
   const { camera, gl } = useThree();
-  const orbit = useRef();
+  const orbitRef = useRef();
 
   useEffect(() => {
-    orbit.current = new OrbitControls(camera, gl.domElement);
-    orbit.current.target.set(0, 3, 0);
-    orbit.current.minDistance = 10;
-    orbit.current.maxDistance = 220;
-    orbit.current.maxPolarAngle = Math.PI / 2 - 0.02;
-    orbit.current.enablePan = true;
-    orbit.current.update();
-    return () => orbit.current.dispose();
+    const controls = new OrbitControls(camera, gl.domElement);
+    controls.target.set(0, 3, 0);
+    controls.minDistance = 8;
+    controls.maxDistance = 280;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+
+    orbitRef.current = controls;
+    return () => controls.dispose();
   }, [camera, gl]);
 
-  useEffect(() => {
-    if (orbit.current) {
-      orbit.current.enabled = !isDragging;
+  useFrame(() => {
+    if (orbitRef.current) {
+      orbitRef.current.update();
     }
+  });
+
+  // Temporarily disable OrbitControls while user is actively dragging an object in 3D
+  useEffect(() => {
+    if (!orbitRef.current) return;
+    orbitRef.current.enabled = !isDragging;
   }, [isDragging]);
+
+  // Switch between Orbit and Pan
+  useEffect(() => {
+    if (!orbitRef.current) return;
+    if (navMode === "pan") {
+      orbitRef.current.mouseButtons = {
+        LEFT: 2, // Pan
+        MIDDLE: 1, // Dolly
+        RIGHT: 0, // Rotate
+      };
+    } else {
+      orbitRef.current.mouseButtons = {
+        LEFT: 0, // Rotate
+        MIDDLE: 1, // Dolly
+        RIGHT: 2, // Pan
+      };
+    }
+  }, [navMode]);
+
+  // Handle camera position presets
+  useEffect(() => {
+    if (!orbitRef.current) return;
+    if (cameraPreset === "reset") {
+      camera.position.set(36, 44, 62);
+      orbitRef.current.target.set(0, 3, 0);
+    } else if (cameraPreset === "top") {
+      camera.position.set(0, 120, 0.01);
+      orbitRef.current.target.set(0, 0, 0);
+    } else if (cameraPreset === "plant") {
+      camera.position.set(16, 18, 24);
+      orbitRef.current.target.set(2, 3, 0);
+    } else if (cameraPreset === "homes") {
+      camera.position.set(44, 22, 32);
+      orbitRef.current.target.set(48, 3, 0);
+    }
+    orbitRef.current.update();
+  }, [cameraPreset, camera]);
 
   return null;
 }
 
 /**
- * 360-Degree Ground Terrain & Facility Apron
+ * Authentic 360-Degree Ground Terrain & Campus Infrastructure
+ * Exactly mirrors satellite layout: asphalt roads, parking bays, security gate, and retention pond
  */
-function Ground({ terrainType, timeOfDay, onGroundClick, onGroundPointerDown, onGroundPointerMove, onGroundPointerUp }) {
-  let groundColor = "#122316"; // Virginia temperate grass
-  let gridColor = "#1f3a25";
+function InteractiveGround({ terrainType, timeOfDay, onGroundPointerMove, onGroundPointerUp, onDeselect }) {
+  let groundColor = "#112215";
+  let gridColor = "#1e3824";
 
   if (terrainType === "desert_plain") {
-    groundColor = timeOfDay === "day" ? "#5a4128" : "#2b1e13"; // Arid desert sand
+    groundColor = timeOfDay === "day" ? "#5a4128" : "#2b1e13";
     gridColor = "#6e5132";
   } else if (terrainType === "mountain_canyon") {
-    groundColor = timeOfDay === "day" ? "#2a3330" : "#141c19"; // Basalt rock & gravel
+    groundColor = timeOfDay === "day" ? "#28322e" : "#141c19";
     gridColor = "#394742";
   } else if (terrainType === "coastal_rolling") {
-    groundColor = timeOfDay === "day" ? "#143a22" : "#0d2616"; // Irish peat meadow
+    groundColor = timeOfDay === "day" ? "#143a22" : "#0d2616";
     gridColor = "#1c4f2f";
   }
 
+  const isNight = timeOfDay === "night";
+
   return (
     <group position={[0, -0.05, 0]}>
-      {/* Expansive 360 Ground Plane */}
+      {/* Expansive Regional Landscape Ground Plane */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         receiveShadow
-        onClick={onGroundClick}
-        onPointerDown={onGroundPointerDown}
         onPointerMove={onGroundPointerMove}
         onPointerUp={onGroundPointerUp}
+        onPointerDown={(e) => {
+          if (e.intersections && e.intersections[0]?.object === e.object) {
+            onDeselect();
+          }
+        }}
       >
-        <planeGeometry args={[300, 240]} />
+        <planeGeometry args={[340, 280]} />
         <meshStandardMaterial color={groundColor} roughness={0.92} />
       </mesh>
-      <gridHelper args={[300, 60, gridColor, gridColor]} position={[0, 0.01, 0]} />
+      <gridHelper args={[340, 68, gridColor, gridColor]} position={[0, 0.01, 0]} />
 
-      {/* Concrete Apron / Data Center Yard Pad */}
+      {/* Main Campus Ring Road (Paved Heavy-Duty Asphalt) */}
       <mesh position={[-16, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[56, 58]} />
-        <meshStandardMaterial color="#1a2330" roughness={0.7} />
+        <planeGeometry args={[84, 86]} />
+        <meshStandardMaterial color="#141d29" roughness={0.7} />
       </mesh>
 
-      {/* Security Fence Perimeter Line */}
-      <mesh position={[-16, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[32, 32.3, 64]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} />
+      {/* Concrete Facility Apron & Maintenance Yard */}
+      <mesh position={[-16, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[62, 64]} />
+        <meshStandardMaterial color="#2d3748" roughness={0.65} />
       </mesh>
+
+      {/* Concrete Curbs Around Facility Apron */}
+      <mesh position={[-16, 0.08, 32]}>
+        <boxGeometry args={[62, 0.16, 0.4]} />
+        <meshStandardMaterial color="#94a3b8" />
+      </mesh>
+      <mesh position={[-16, 0.08, -32]}>
+        <boxGeometry args={[62, 0.16, 0.4]} />
+        <meshStandardMaterial color="#94a3b8" />
+      </mesh>
+
+      {/* Visitor & Staff Parking Bays (South Entrance) */}
+      <group position={[-16, 0.035, 26]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[28, 9]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.8} />
+        </mesh>
+        {/* Painted White Parking Space Lines */}
+        {[-12, -8, -4, 0, 4, 8, 12].map((x) => (
+          <mesh key={x} position={[x, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.2, 7.5]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.75} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Security Guardhouse & Gated Main Entrance (South Property Line) */}
+      <group position={[-16, 0, 42]}>
+        {/* Guard Shack Building */}
+        <mesh position={[4, 1.6, 0]}>
+          <boxGeometry args={[3.2, 3.2, 4.0]} />
+          <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.4} />
+        </mesh>
+        <mesh position={[4, 1.8, 0]}>
+          <boxGeometry args={[3.3, 1.4, 3.2]} />
+          <meshStandardMaterial color="#0284c7" metalness={0.9} transparent opacity={0.6} />
+        </mesh>
+        {/* Motorized Yellow Barrier Gate Arm */}
+        <mesh position={[-1.5, 1.1, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 2.2, 8]} />
+          <meshStandardMaterial color="#334155" />
+        </mesh>
+        <mesh position={[-4.5, 1.2, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.08, 0.08, 6, 8]} />
+          <meshStandardMaterial color="#eab308" />
+        </mesh>
+      </group>
+
+      {/* Stormwater Retention Basin (Mandated by Loudoun / EPA Water Regulations) */}
+      <group position={[22, 0, 42]}>
+        {/* Sloped Earthen Basin Pit */}
+        <mesh position={[0, -0.4, 0]}>
+          <boxGeometry args={[20, 0.8, 22]} />
+          <meshStandardMaterial color="#1a351f" roughness={0.9} />
+        </mesh>
+        {/* Reflective Retention Water Pool */}
+        <mesh position={[0, -0.15, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[18, 20]} />
+          <meshStandardMaterial
+            color="#0284c7"
+            roughness={0.1}
+            metalness={0.8}
+            transparent
+            opacity={0.82}
+          />
+        </mesh>
+        {/* Cattail / Reeds along pond edge */}
+        {[-8, -4, 0, 4, 8].map((rx) => (
+          <mesh key={rx} position={[rx, 0.4, -9.5]}>
+            <cylinderGeometry args={[0.04, 0.06, 1.2, 6]} />
+            <meshStandardMaterial color="#65a30d" />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Perimeter Security Fence (Chainlink Wire with Barbed Wire Top Outriggers) */}
+      <group>
+        {/* South Boundary Fence */}
+        <mesh position={[-16, 1.4, 46]}>
+          <boxGeometry args={[78, 2.8, 0.08]} />
+          <meshStandardMaterial color="#64748b" wireframe transparent opacity={0.3} />
+        </mesh>
+        {/* East Property Line Security Fence (Separates Data Center from Residential Lots) */}
+        <mesh position={[28, 1.4, 0]}>
+          <boxGeometry args={[0.08, 2.8, 88]} />
+          <meshStandardMaterial color="#64748b" wireframe transparent opacity={0.35} />
+        </mesh>
+      </group>
     </group>
   );
 }
 
 /**
- * 360-Degree Surrounding Environmental Landscape
- * Real-world representations on ALL sides:
- * - North: River (The Dalles) or Suburban Street (Loudoun)
- * - East: Residential Neighborhood (Subdivisions / Homes)
- * - South: Arterial Highway / Canyon Rock (Waxpool Rd / Cliffs)
- * - West: High-Voltage Electrical Substation & Transformer Yard
+ * Authentic 360-Degree Surroundings
+ * East: Real Residential Subdivision with 2-Story Gabled Homes, Yards, and Streetlights
+ * South: 4-Lane Arterial Highway
+ * West: High-Voltage Transmission Substation
  */
 function SurroundingLandscape({ site, timeOfDay }) {
   const isNight = timeOfDay === "night";
   const windowColor = isNight ? "#fef08a" : "#94a3b8";
   const windowEmissive = isNight ? "#eab308" : "#000000";
-  const windowIntensity = isNight ? 1.0 : 0.0;
+  const windowIntensity = isNight ? 1.2 : 0.0;
 
   return (
     <group>
       {/* =========================================================================
-          EAST BOUNDARY: RESIDENTIAL SUBDIVISION (HOMES, STREETS, YARDS)
+          EAST BOUNDARY: RESIDENTIAL SUBDIVISION (Neighborhood Cul-de-sac)
           ========================================================================= */}
       <group position={[48, 0, 0]}>
-        {/* Neighborhood Residential Street */}
+        {/* Neighborhood Paved Residential Street */}
         <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[8, 120]} />
+          <planeGeometry args={[9, 136]} />
           <meshStandardMaterial color="#1e293b" roughness={0.8} />
         </mesh>
-        {/* Street Centerline */}
+        {/* Concrete Sidewalk & Curb */}
+        <mesh position={[-5, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.6, 136]} />
+          <meshStandardMaterial color="#cbd5e1" roughness={0.7} />
+        </mesh>
+        {/* Double Yellow Road Centerline */}
         <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.3, 115]} />
-          <meshBasicMaterial color="#e2e8f0" transparent opacity={0.6} />
+          <planeGeometry args={[0.25, 130]} />
+          <meshBasicMaterial color="#fef08a" transparent opacity={0.7} />
         </mesh>
 
-        {/* Residential Homes along the East Property Line */}
-        {[-45, -30, -15, 0, 15, 30, 45].map((z, idx) => (
-          <group key={z} position={[12, 0, z]}>
-            {/* Front Lawn */}
-            <mesh position={[-4, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[8, 12]} />
-              <meshStandardMaterial color={site.terrainType === "desert_plain" ? "#4a3520" : "#1b4324"} />
-            </mesh>
+        {/* 7 Distinct Suburban Two-Story Homes */}
+        {[-48, -32, -16, 0, 16, 32, 48].map((z, idx) => {
+          const sidingColors = ["#f8fafc", "#e2e8f0", "#e2d8ce", "#cbd5e1", "#f1f5f9", "#e2d2b8", "#f8fafc"];
+          const roofColors = ["#334155", "#1e293b", "#475569", "#374151", "#334155", "#4a3c31", "#1e293b"];
+          const carColors = ["#dc2626", "#0284c7", "#475569", "#ffffff", "#10b981", "#eab308", "#1e293b"];
 
-            {/* House Main Body */}
-            <mesh position={[2, 2.4, 0]}>
-              <boxGeometry args={[7.5, 4.8, 8.5]} />
-              <meshStandardMaterial
-                color={site.terrainType === "desert_plain" ? "#e2d2b8" : idx % 2 === 0 ? "#f8fafc" : "#e2e8f0"}
-                roughness={0.7}
-              />
-            </mesh>
-
-            {/* Pitched Roof */}
-            <mesh position={[2, 5.8, 0]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[5.8, 5.8, 9.2]} />
-              <meshStandardMaterial
-                color={site.terrainType === "desert_plain" ? "#b45309" : "#334155"}
-                roughness={0.8}
-              />
-            </mesh>
-
-            {/* Front Windows (Glow warmly at night) */}
-            <mesh position={[-1.8, 2.5, 2]}>
-              <planeGeometry args={[1.6, 1.6]} />
-              <meshStandardMaterial
-                color={windowColor}
-                emissive={windowEmissive}
-                emissiveIntensity={windowIntensity}
-                side={DoubleSide}
-              />
-            </mesh>
-            <mesh position={[-1.8, 2.5, -2]}>
-              <planeGeometry args={[1.6, 1.6]} />
-              <meshStandardMaterial
-                color={windowColor}
-                emissive={windowEmissive}
-                emissiveIntensity={windowIntensity}
-                side={DoubleSide}
-              />
-            </mesh>
-
-            {/* Driveway & Parked Car */}
-            <mesh position={[-3, 0.035, 3.2]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[6, 3.2]} />
-              <meshStandardMaterial color="#334155" roughness={0.9} />
-            </mesh>
-            <mesh position={[-2.5, 0.7, 3.2]}>
-              <boxGeometry args={[3.2, 1.2, 1.8]} />
-              <meshStandardMaterial color={idx % 3 === 0 ? "#dc2626" : idx % 3 === 1 ? "#0284c7" : "#475569"} roughness={0.4} metalness={0.6} />
-            </mesh>
-
-            {/* Suburban Streetlamp */}
-            <group position={[-7.5, 0, 0]}>
-              <mesh position={[0, 2.8, 0]}>
-                <cylinderGeometry args={[0.06, 0.08, 5.6, 8]} />
-                <meshStandardMaterial color="#64748b" metalness={0.8} />
+          return (
+            <group key={z} position={[12, 0, z]}>
+              {/* Manicured Front Green Lawn */}
+              <mesh position={[-4, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[9, 13.5]} />
+                <meshStandardMaterial color={site.terrainType === "desert_plain" ? "#4a3520" : "#1a4623"} />
               </mesh>
-              <mesh position={[0.4, 5.6, 0]} rotation={[0, 0, -Math.PI / 6]}>
-                <cylinderGeometry args={[0.05, 0.05, 1.2, 8]} />
-                <meshStandardMaterial color="#64748b" />
+
+              {/* Concrete Driveway */}
+              <mesh position={[-3.5, 0.035, 3.2]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[7, 3.2]} />
+                <meshStandardMaterial color="#64748b" roughness={0.85} />
               </mesh>
-              {isNight && (
-                <pointLight position={[0.8, 5.8, 0]} intensity={8} distance={18} color="#fef08a" />
-              )}
+
+              {/* Parked Resident Car */}
+              <group position={[-3, 0.65, 3.2]}>
+                <mesh position={[0, 0, 0]}>
+                  <boxGeometry args={[3.2, 1.1, 1.8]} />
+                  <meshStandardMaterial color={carColors[idx % carColors.length]} roughness={0.3} metalness={0.7} />
+                </mesh>
+                <mesh position={[-0.3, 0.7, 0]}>
+                  <boxGeometry args={[1.8, 0.8, 1.6]} />
+                  <meshStandardMaterial color="#0f172a" metalness={0.9} />
+                </mesh>
+              </group>
+
+              {/* House Main Body (2-Story) */}
+              <mesh position={[2, 2.6, 0]}>
+                <boxGeometry args={[8.0, 5.2, 9.2]} />
+                <meshStandardMaterial color={sidingColors[idx % sidingColors.length]} roughness={0.65} />
+              </mesh>
+
+              {/* Front Porch & Entrance Door */}
+              <group position={[-2.2, 1.2, 0]}>
+                <mesh position={[0, -0.6, 0]}>
+                  <boxGeometry args={[1.6, 0.3, 3.2]} />
+                  <meshStandardMaterial color="#94a3b8" />
+                </mesh>
+                <mesh position={[0, 1.2, 0]}>
+                  <boxGeometry args={[1.6, 0.2, 3.4]} />
+                  <meshStandardMaterial color="#334155" />
+                </mesh>
+                <mesh position={[0.2, 0.3, 0]}>
+                  <boxGeometry args={[0.1, 1.9, 1.0]} />
+                  <meshStandardMaterial color="#78350f" />
+                </mesh>
+              </group>
+
+              {/* Gabled Architectural Shingle Roof */}
+              <mesh position={[2, 6.2, 0]} rotation={[0, 0, Math.PI / 4]}>
+                <boxGeometry args={[6.2, 6.2, 9.8]} />
+                <meshStandardMaterial color={roofColors[idx % roofColors.length]} roughness={0.8} />
+              </mesh>
+
+              {/* Windows (Warm golden glow at night) */}
+              <mesh position={[-2.05, 2.8, 2.2]}>
+                <planeGeometry args={[1.6, 1.6]} />
+                <meshStandardMaterial
+                  color={windowColor}
+                  emissive={windowEmissive}
+                  emissiveIntensity={windowIntensity}
+                  side={DoubleSide}
+                />
+              </mesh>
+              <mesh position={[-2.05, 2.8, -2.2]}>
+                <planeGeometry args={[1.6, 1.6]} />
+                <meshStandardMaterial
+                  color={windowColor}
+                  emissive={windowEmissive}
+                  emissiveIntensity={windowIntensity}
+                  side={DoubleSide}
+                />
+              </mesh>
+
+              {/* Wooden Fenced Backyard (Separates homes from Data Center perimeter) */}
+              <mesh position={[6.5, 0.9, 0]}>
+                <boxGeometry args={[0.1, 1.8, 12]} />
+                <meshStandardMaterial color="#78350f" roughness={0.9} />
+              </mesh>
+
+              {/* Streetlamp on Curb */}
+              <group position={[-8.5, 0, 0]}>
+                <mesh position={[0, 2.8, 0]}>
+                  <cylinderGeometry args={[0.06, 0.08, 5.6, 8]} />
+                  <meshStandardMaterial color="#64748b" metalness={0.8} />
+                </mesh>
+                <mesh position={[0.5, 5.6, 0]} rotation={[0, 0, -Math.PI / 6]}>
+                  <cylinderGeometry args={[0.05, 0.05, 1.2, 8]} />
+                  <meshStandardMaterial color="#64748b" />
+                </mesh>
+                {isNight && (
+                  <pointLight position={[1.0, 5.8, 0]} intensity={9} distance={20} color="#fef08a" />
+                )}
+              </group>
             </group>
-          </group>
-        ))}
+          );
+        })}
       </group>
 
       {/* =========================================================================
-          SOUTH BOUNDARY: ARTERIAL HIGHWAY CORRIDOR (ROUTE 28 / ARTERIAL ROAD)
+          SOUTH BOUNDARY: 4-LANE ARTERIAL HIGHWAY (Waxpool Road Corridor)
           ========================================================================= */}
-      <group position={[-16, 0, 52]}>
-        {/* 4-Lane Asphalt Highway */}
+      <group position={[-16, 0, 58]}>
         <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[180, 14]} />
-          <meshStandardMaterial color="#18202f" roughness={0.8} />
+          <planeGeometry args={[220, 16]} />
+          <meshStandardMaterial color="#141a24" roughness={0.8} />
         </mesh>
-        {/* Median Concrete Barrier */}
-        <mesh position={[0, 0.45, 0]}>
-          <boxGeometry args={[180, 0.9, 0.6]} />
+        {/* Concrete Jersey Safety Barrier in Center */}
+        <mesh position={[0, 0.5, 0]}>
+          <boxGeometry args={[220, 1.0, 0.6]} />
           <meshStandardMaterial color="#94a3b8" />
         </mesh>
-        {/* Lane Striping */}
-        {[-3.5, 3.5].map((laneZ) => (
-          <mesh key={laneZ} position={[0, 0.035, laneZ]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[170, 0.25]} />
+        {/* Painted Lane Markings */}
+        {[-4, 4].map((lz) => (
+          <mesh key={lz} position={[0, 0.035, lz]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[210, 0.25]} />
             <meshBasicMaterial color="#fef08a" transparent opacity={0.6} />
           </mesh>
         ))}
-
-        {/* Highway Traffic Simulation (Vehicles moving / stationed) */}
-        {[-60, -20, 25, 65].map((carX, i) => (
-          <group key={carX} position={[carX, 0.7, (i % 2 === 0 ? 3.5 : -3.5)]}>
-            <mesh>
-              <boxGeometry args={[3.8, 1.3, 1.8]} />
-              <meshStandardMaterial color={i % 2 === 0 ? "#e2e8f0" : "#3b82f6"} metalness={0.6} roughness={0.3} />
-            </mesh>
-            {/* Headlights / Taillights */}
-            <mesh position={[1.92, 0.1, 0]}>
-              <planeGeometry args={[0.2, 0.5]} />
-              <meshBasicMaterial color={i % 2 === 0 ? "#fef08a" : "#ef4444"} side={DoubleSide} />
-            </mesh>
-          </group>
-        ))}
       </group>
 
       {/* =========================================================================
-          WEST BOUNDARY: HIGH-VOLTAGE SUBSTATION & POWER TRANSFORMER YARD
+          WEST BOUNDARY: HIGH-VOLTAGE UTILITY SUBSTATION & TRANSMISSION TOWERS
           ========================================================================= */}
-      <group position={[-52, 0, 0]}>
-        {/* Gravel Substation Yard */}
+      <group position={[-60, 0, 0]}>
+        {/* Crushed Rock / Gravel Yard Pad */}
         <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[26, 48]} />
-          <meshStandardMaterial color="#334155" roughness={0.95} />
+          <planeGeometry args={[32, 56]} />
+          <meshStandardMaterial color="#475569" roughness={0.95} />
         </mesh>
-        {/* Chainlink Fence Surrounding Substation */}
-        <mesh position={[0, 1.5, 0]}>
-          <boxGeometry args={[26, 3, 48]} />
+        {/* Substation Chainlink Security Enclosure */}
+        <mesh position={[0, 1.8, 0]}>
+          <boxGeometry args={[32, 3.6, 56]} />
           <meshStandardMaterial color="#64748b" wireframe transparent opacity={0.4} />
         </mesh>
-        {/* 3 Step-Down Utility Transformers with Ceramic Insulators */}
-        {[-14, 0, 14].map((transZ) => (
-          <group key={transZ} position={[0, 0, transZ]}>
-            {/* Transformer Main Tank */}
-            <mesh position={[0, 2.2, 0]}>
-              <boxGeometry args={[5.5, 4.4, 5.5]} />
-              <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.4} />
+
+        {/* 2 High-Voltage Steel Lattice A-Frame Towers */}
+        {[-18, 18].map((tz) => (
+          <group key={tz} position={[-8, 0, tz]}>
+            <mesh position={[0, 8, 0]}>
+              <cylinderGeometry args={[0.3, 1.8, 16, 4]} />
+              <meshStandardMaterial color="#94a3b8" wireframe />
             </mesh>
-            {/* Cooling Radiator Fins */}
-            {[-2.9, 2.9].map((rx) => (
-              <mesh key={rx} position={[rx, 2.2, 0]}>
-                <boxGeometry args={[0.3, 3.8, 4.8]} />
-                <meshStandardMaterial color="#334155" metalness={0.9} />
+            <mesh position={[0, 14, 0]}>
+              <boxGeometry args={[6, 0.4, 0.4]} />
+              <meshStandardMaterial color="#94a3b8" />
+            </mesh>
+          </group>
+        ))}
+
+        {/* Step-Down Transformers with Cooling Radiator Fins */}
+        {[-14, 0, 14].map((transZ) => (
+          <group key={transZ} position={[4, 0, transZ]}>
+            <mesh position={[0, 2.4, 0]}>
+              <boxGeometry args={[6.0, 4.8, 6.0]} />
+              <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.3} />
+            </mesh>
+            {/* Cooling Fin Radiators */}
+            {[-3.2, 3.2].map((rx) => (
+              <mesh key={rx} position={[rx, 2.4, 0]}>
+                <boxGeometry args={[0.4, 4.0, 5.2]} />
+                <meshStandardMaterial color="#1e293b" metalness={0.9} />
               </mesh>
             ))}
-            {/* High Voltage Ceramic Bushings / Insulators */}
-            {[-1.5, 0, 1.5].map((bx) => (
-              <mesh key={bx} position={[bx, 5.2, 0]}>
-                <cylinderGeometry args={[0.15, 0.22, 1.8, 8]} />
+            {/* Porcelain High-Voltage Bushings */}
+            {[-1.8, 0, 1.8].map((bx) => (
+              <mesh key={bx} position={[bx, 5.6, 0]}>
+                <cylinderGeometry args={[0.18, 0.26, 2.0, 8]} />
                 <meshStandardMaterial color="#b45309" roughness={0.2} />
               </mesh>
             ))}
-            {/* Steel Transmission Lattice Pylon */}
-            <mesh position={[0, 7.5, 0]}>
-              <boxGeometry args={[2.5, 5, 2.5]} />
-              <meshStandardMaterial color="#94a3b8" wireframe />
-            </mesh>
           </group>
         ))}
       </group>
-
-      {/* =========================================================================
-          SITE SPECIFIC: COLUMBIA RIVER & BASALT CANYON (THE DALLES, OR)
-          ========================================================================= */}
-      {site.id === "the_dalles_or" && (
-        <group>
-          {/* North: The Columbia River Expanse */}
-          <group position={[0, 0, -56]}>
-            {/* Water Surface Plane */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[260, 45]} />
-              <meshStandardMaterial
-                color="#0f2b48"
-                roughness={0.2}
-                metalness={0.4}
-                transparent
-                opacity={0.88}
-              />
-            </mesh>
-            {/* Rocky River Shoreline */}
-            <mesh position={[0, 0.1, 22.5]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[260, 4]} />
-              <meshStandardMaterial color="#2d3748" roughness={0.95} />
-            </mesh>
-          </group>
-
-          {/* South: Massive Basalt Canyon Cliffs (Echo Amplification) */}
-          <group position={[0, 0, 72]}>
-            {[-80, -45, -10, 25, 60, 95].map((cx, idx) => (
-              <group key={cx} position={[cx, 0, 0]}>
-                {/* Stepped Basalt Cliff Tier 1 */}
-                <mesh position={[0, 9, 0]}>
-                  <boxGeometry args={[34, 18, 16]} />
-                  <meshStandardMaterial color="#1e2930" roughness={0.95} />
-                </mesh>
-                {/* Stepped Basalt Cliff Tier 2 */}
-                <mesh position={[0, 22, 5]}>
-                  <boxGeometry args={[28, 16, 12]} />
-                  <meshStandardMaterial color="#151e24" roughness={0.95} />
-                </mesh>
-                {/* Ponderosa Pines on Cliff Ledges */}
-                {[-10, 0, 10].map((px) => (
-                  <mesh key={px} position={[px, 19, -2]}>
-                    <coneGeometry args={[1.8, 5, 6]} />
-                    <meshStandardMaterial color="#16381e" />
-                  </mesh>
-                ))}
-              </group>
-            ))}
-          </group>
-        </group>
-      )}
-
-      {/* =========================================================================
-          SITE SPECIFIC: DESERT CORRIDOR (CHANDLER / PHOENIX, AZ)
-          ========================================================================= */}
-      {site.id === "phoenix_az" && (
-        <group>
-          {/* Desert Saguaro Cacti Scattering */}
-          {[
-            [-35, -28], [25, -35], [42, 28], [-42, 38], [15, 38], [-10, -45]
-          ].map(([cx, cz], i) => (
-            <group key={i} position={[cx, 0, cz]}>
-              {/* Main Trunk */}
-              <mesh position={[0, 3, 0]}>
-                <cylinderGeometry args={[0.3, 0.35, 6, 8]} />
-                <meshStandardMaterial color="#2e5a44" roughness={0.9} />
-              </mesh>
-              {/* Left Arm */}
-              <mesh position={[-0.8, 3.2, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[0.2, 0.2, 1.4, 8]} />
-                <meshStandardMaterial color="#2e5a44" />
-              </mesh>
-              <mesh position={[-1.4, 4.2, 0]}>
-                <cylinderGeometry args={[0.2, 0.2, 2.2, 8]} />
-                <meshStandardMaterial color="#2e5a44" />
-              </mesh>
-              {/* Right Arm */}
-              <mesh position={[0.8, 2.6, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[0.2, 0.2, 1.4, 8]} />
-                <meshStandardMaterial color="#2e5a44" />
-              </mesh>
-              <mesh position={[1.4, 3.8, 0]}>
-                <cylinderGeometry args={[0.2, 0.2, 2.6, 8]} />
-                <meshStandardMaterial color="#2e5a44" />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      )}
-
-      {/* =========================================================================
-          SITE SPECIFIC: IRISH STONE WALLS & CANAL (DUBLIN, IRELAND)
-          ========================================================================= */}
-      {site.id === "dublin_ie" && (
-        <group>
-          {/* Dry Stone Boundary Hedgerow Walls */}
-          {[-25, 25].map((wz) => (
-            <mesh key={wz} position={[0, 0.5, wz]}>
-              <boxGeometry args={[180, 1.0, 0.8]} />
-              <meshStandardMaterial color="#475569" roughness={0.95} />
-            </mesh>
-          ))}
-        </group>
-      )}
     </group>
   );
 }
 
 /**
- * Realistic Hyperscale Data Center Building with Architectural Variations
+ * Authentic Hyperscale Data Center Building
+ * Exactly modeled after Google, AWS, and Equinix campuses:
+ * - Precast concrete insulated sandwich panels with reveal joints
+ * - Reflective white TPO membrane flat roof
+ * - 8 Rooftop Air Handling Units (CRAHs / RTUs) with exhaust cowls
+ * - Rooftop acoustic louver screen wall
+ * - Loading dock bays with 2 parked 53-ft logistics dry-van trailers!
+ * - Corporate blue glass curtain-wall entrance with steel canopy
+ * - Backup diesel generator farm
  */
-function DataCenterBuilding({ explodedProgress = 0, buildingStyle = "1story", timeOfDay }) {
-  const isNight = timeOfDay === "night";
-  const roofLift = 14 * explodedProgress;
-  const wallSpread = 7 * explodedProgress;
-
-  const is2Story = buildingStyle === "2story";
-  const buildingHeight = is2Story ? 10.5 : 7.2;
+function DataCenterBuilding() {
+  const buildingHeight = 7.8;
 
   return (
     <group position={[-18, 0, 0]}>
-      {/* Internal Compute Hall (Visible when exploded) */}
-      <group position={[0, 0, 0]}>
-        <mesh position={[0, 0.3, 0]}>
-          <boxGeometry args={[26, 0.6, 34]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.6} />
-        </mesh>
+      {/* =========================================================================
+          1. MAIN COMPUTE SERVER HALL STRUCTURE
+          ========================================================================= */}
+      {/* Precast Insulated Concrete Walls with Reveal Joints */}
+      <mesh position={[0, buildingHeight / 2, 0]}>
+        <boxGeometry args={[30, buildingHeight, 38]} />
+        <meshStandardMaterial color="#e2e8f0" roughness={0.65} metalness={0.12} />
+      </mesh>
 
-        {/* 4 Rows of Server Cabinets */}
-        {[-9, -3, 3, 9].map((rowZ) => (
-          <group key={rowZ} position={[0, 0.6, rowZ]}>
-            {[-9, -4, 1, 6].map((colX) => (
-              <mesh key={colX} position={[colX, 2.4, 0]}>
-                <boxGeometry args={[2.2, 4.8, 1.8]} />
-                <meshStandardMaterial color="#0b1320" metalness={0.8} />
+      {/* Dark Architectural Corporate Accent Band */}
+      <mesh position={[0, buildingHeight * 0.76, 0]}>
+        <boxGeometry args={[30.2, 0.9, 38.2]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.5} />
+      </mesh>
+
+      {/* =========================================================================
+          2. WHITE TPO REFLECTIVE MEMBRANE ROOF & ROOFTOP CRAH / RTU UNITS
+          ========================================================================= */}
+      {/* White Heat-Reflective Roof Membrane */}
+      <mesh position={[0, buildingHeight + 0.15, 0]}>
+        <boxGeometry args={[30.4, 0.3, 38.4]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.3} metalness={0.1} />
+      </mesh>
+
+      {/* Roof Parapet Walls */}
+      <mesh position={[0, buildingHeight + 0.6, 19.1]}>
+        <boxGeometry args={[30.4, 0.9, 0.4]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+      <mesh position={[0, buildingHeight + 0.6, -19.1]}>
+        <boxGeometry args={[30.4, 0.9, 0.4]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+      <mesh position={[15.1, buildingHeight + 0.6, 0]}>
+        <boxGeometry args={[0.4, 0.9, 38.4]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+      <mesh position={[-15.1, buildingHeight + 0.6, 0]}>
+        <boxGeometry args={[0.4, 0.9, 38.4]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+
+      {/* 8 Rooftop Air Handling Units (CRAH / RTU Penthouse Units) */}
+      {[-8, 0, 8].map((rx) =>
+        [-10, 0, 10].map((rz) => {
+          if (rx === 0 && rz === 0) return null; // Center roof corridor
+          return (
+            <group key={`${rx}_${rz}`} position={[rx, buildingHeight + 0.3, rz]}>
+              {/* HVAC Enclosure Box */}
+              <mesh position={[0, 0.9, 0]}>
+                <boxGeometry args={[4.2, 1.8, 3.4]} />
+                <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.3} />
               </mesh>
-            ))}
-          </group>
-        ))}
-      </group>
+              {/* Silver Vertical Exhaust Cowl */}
+              <mesh position={[0, 2.1, 0]}>
+                <cylinderGeometry args={[0.8, 0.8, 0.6, 16]} />
+                <meshStandardMaterial color="#cbd5e1" metalness={0.9} />
+              </mesh>
+            </group>
+          );
+        })
+      )}
 
-      {/* Tilt-Up Concrete Exterior Walls */}
-      {/* East Facade (Facing Chiller Yard & Homes) */}
-      <group position={[13.2 + wallSpread, buildingHeight / 2, 0]}>
-        <mesh>
-          <boxGeometry args={[0.6, buildingHeight, 34]} />
-          <meshStandardMaterial color="#334155" roughness={0.85} />
+      {/* Rooftop Acoustic Screen Louver Fence */}
+      <mesh position={[0, buildingHeight + 1.2, 0]}>
+        <boxGeometry args={[24, 1.8, 0.2]} />
+        <meshStandardMaterial color="#334155" metalness={0.8} />
+      </mesh>
+
+      {/* =========================================================================
+          3. CORPORATE FRONT ENTRANCE (South Facade)
+          ========================================================================= */}
+      <group position={[0, 0, 19.2]}>
+        {/* Tinted Corporate Blue Glass Curtain Wall */}
+        <mesh position={[0, 3.2, 0]}>
+          <boxGeometry args={[15, 4.8, 0.3]} />
+          <meshStandardMaterial color="#0284c7" metalness={0.9} roughness={0.1} transparent opacity={0.75} />
         </mesh>
-        {/* High-Volume Chilled Water Piping Penetrations */}
-        {[-6, 0, 6].map((pipeZ) => (
-          <mesh key={pipeZ} position={[0.4, -1, pipeZ]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.35, 0.35, 0.8, 12]} />
-            <meshStandardMaterial color="#0284c7" metalness={0.8} />
+        {/* Modern Cantilevered Entrance Canopy */}
+        <mesh position={[0, 4.4, 2.0]}>
+          <boxGeometry args={[17, 0.4, 4.0]} />
+          <meshStandardMaterial color="#0f172a" metalness={0.8} />
+        </mesh>
+        {/* Concrete Security Bollards */}
+        {[-6, -3, 0, 3, 6].map((bx) => (
+          <mesh key={bx} position={[bx, 0.5, 3.8]}>
+            <cylinderGeometry args={[0.16, 0.16, 1.0, 12]} />
+            <meshStandardMaterial color="#cbd5e1" />
           </mesh>
         ))}
       </group>
 
-      {/* West Facade */}
-      <mesh position={[-13.2 - wallSpread, buildingHeight / 2, 0]}>
-        <boxGeometry args={[0.6, buildingHeight, 34]} />
-        <meshStandardMaterial color="#334155" roughness={0.85} />
-      </mesh>
+      {/* =========================================================================
+          4. INDUSTRIAL LOADING DOCK & 53-FT LOGISTICS SEMI-TRAILERS (North Facade)
+          ========================================================================= */}
+      <group position={[0, 0, -19.2]}>
+        {[-8, -2.5, 3, 8.5].map((dockX, idx) => (
+          <group key={dockX} position={[dockX, 2.2, 0]}>
+            {/* Roll-Up Overhead Dock Door */}
+            <mesh>
+              <boxGeometry args={[4.2, 3.8, 0.2]} />
+              <meshStandardMaterial color="#334155" metalness={0.7} />
+            </mesh>
+            {/* Yellow Rubber Dock Bumpers */}
+            <mesh position={[-1.8, -1.6, 0.2]}>
+              <boxGeometry args={[0.3, 0.8, 0.3]} />
+              <meshStandardMaterial color="#eab308" />
+            </mesh>
+            <mesh position={[1.8, -1.6, 0.2]}>
+              <boxGeometry args={[0.3, 0.8, 0.3]} />
+              <meshStandardMaterial color="#eab308" />
+            </mesh>
 
-      {/* North Facade */}
-      <mesh position={[0, buildingHeight / 2, -17.2 - wallSpread]}>
-        <boxGeometry args={[27, buildingHeight, 0.6]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} />
-      </mesh>
+            {/* 2 Parked 53-ft Logistics Semi-Trailers Backed into Docks 1 and 3 */}
+            {(idx === 0 || idx === 2) && (
+              <group position={[0, 0.2, -7.5]}>
+                {/* 53-Ft Dry-Van White Aluminum Cargo Trailer Body */}
+                <mesh position={[0, 0, 0]}>
+                  <boxGeometry args={[3.4, 3.6, 13.5]} />
+                  <meshStandardMaterial color="#ffffff" roughness={0.4} metalness={0.2} />
+                </mesh>
+                {/* Red Structural Steel Chassis Frame */}
+                <mesh position={[0, -1.7, 0]}>
+                  <boxGeometry args={[3.2, 0.3, 13.2]} />
+                  <meshStandardMaterial color="#dc2626" />
+                </mesh>
+                {/* Rear Tandem Dual Wheels */}
+                {[-1.4, 1.4].map((wx) => (
+                  <group key={wx} position={[wx, -1.8, -4.5]}>
+                    <mesh rotation={[0, 0, Math.PI / 2]}>
+                      <cylinderGeometry args={[0.6, 0.6, 0.5, 16]} />
+                      <meshStandardMaterial color="#1e293b" />
+                    </mesh>
+                  </group>
+                ))}
+              </group>
+            )}
+          </group>
+        ))}
+      </group>
 
-      {/* South Facade with Entrance Bay */}
-      <mesh position={[0, buildingHeight / 2, 17.2 + wallSpread]}>
-        <boxGeometry args={[27, buildingHeight, 0.6]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} />
-      </mesh>
-
-      {/* Roof Parapet System (Lifts in Exploded View) */}
-      <group position={[0, buildingHeight + roofLift, 0]}>
-        <mesh position={[0, 0.3, 0]}>
-          <boxGeometry args={[27, 0.6, 35]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.7} />
+      {/* =========================================================================
+          5. BACKUP DIESEL GENERATOR FARM (West of Compute Core)
+          ========================================================================= */}
+      <group position={[-21, 0, 0]}>
+        <mesh position={[0, 0.15, 0]}>
+          <boxGeometry args={[8.5, 0.3, 30]} />
+          <meshStandardMaterial color="#334155" roughness={0.8} />
         </mesh>
-        {/* Perimeter Parapet Screen */}
-        <mesh position={[0, 1.2, 17.2]}>
-          <boxGeometry args={[27, 1.4, 0.3]} />
-          <meshStandardMaterial color="#475569" />
+        {/* 4 Heavy-Duty Weatherproof Sound-Attenuated Generators */}
+        {[-9, -3, 3, 9].map((genZ) => (
+          <group key={genZ} position={[0, 0.3, genZ]}>
+            <mesh position={[0, 1.6, 0]}>
+              <boxGeometry args={[5.4, 2.8, 3.6]} />
+              <meshStandardMaterial color="#374151" metalness={0.7} roughness={0.4} />
+            </mesh>
+            {/* Vertical Silver Silencer Stack */}
+            <mesh position={[1.8, 4.0, 0]}>
+              <cylinderGeometry args={[0.25, 0.25, 2.4, 12]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.9} roughness={0.2} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      {/* =========================================================================
+          6. CHILLED WATER DISTRIBUTION MANIFOLDS (CHWS & CHWR)
+          ========================================================================= */}
+      <group position={[15.2, 1.6, 0]}>
+        {/* Blue: Chilled Water Supply (CHWS, 7°C) */}
+        <mesh position={[0, 0.45, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.35, 0.35, 2.6, 16]} />
+          <meshStandardMaterial color="#0284c7" metalness={0.7} />
         </mesh>
-        <mesh position={[0, 1.2, -17.2]}>
-          <boxGeometry args={[27, 1.4, 0.3]} />
-          <meshStandardMaterial color="#475569" />
+        {/* Green: Chilled Water Return (CHWR, 14°C) */}
+        <mesh position={[0, -0.45, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.35, 0.35, 2.6, 16]} />
+          <meshStandardMaterial color="#10b981" metalness={0.7} />
         </mesh>
       </group>
     </group>
@@ -466,9 +641,56 @@ function DataCenterBuilding({ explodedProgress = 0, buildingStyle = "1story", ti
 }
 
 /**
- * 400-Ton Modular V-Bank Industrial Air-Cooled Chiller Unit
+ * 3D Selection Ring Indicator
  */
-function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress = 0, acousticSilencers }) {
+function SelectionRing({ radius = 8, label = "SELECTED" }) {
+  const spriteTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgba(14, 165, 233, 0.95)";
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(0, 0, 256, 64, 12);
+    } else {
+      ctx.rect(0, 0, 256, 64);
+    }
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.font = "bold 22px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(label, 128, 40);
+
+    return new CanvasTexture(canvas);
+  }, [label]);
+
+  useEffect(() => () => spriteTexture.dispose(), [spriteTexture]);
+
+  return (
+    <group position={[0, 0.1, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[radius - 0.4, radius, 32]} />
+        <meshBasicMaterial color="#38bdf8" side={DoubleSide} />
+      </mesh>
+      <sprite position={[0, radius * 0.7 + 2, 0]} scale={[5, 1.25, 1]}>
+        <spriteMaterial map={spriteTexture} depthTest={false} />
+      </sprite>
+    </group>
+  );
+}
+
+/**
+ * Draggable Chiller Yard Compound
+ */
+function DraggableChillerYard({
+  item,
+  isSelected,
+  running,
+  fanSpeedPercent,
+  onSelect,
+  onPointerDown,
+}) {
   const fans = [useRef(), useRef(), useRef(), useRef()];
 
   useFrame((_, delta) => {
@@ -479,68 +701,87 @@ function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress
     });
   });
 
-  const fanLift = 6 * explodedProgress;
+  let yardY = 0;
+  if (item.placement === "underground") yardY = -5.5;
+  else if (item.placement === "semi_berm") yardY = -2.2;
+
+  const radAngle = ((item.rotation || 0) * Math.PI) / 180;
 
   return (
-    <group position={position}>
-      {/* Structural Steel Chiller Skid Base */}
-      <mesh position={[0, 0.4, 0]}>
-        <boxGeometry args={[4.8, 0.8, 8.4]} />
-        <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.4} />
+    <group
+      position={[item.x, yardY, item.z]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(item.id);
+        onPointerDown(item.id, e);
+      }}
+    >
+      {isSelected && <SelectionRing radius={10} label="CHILLERS · DRAGGABLE" />}
+
+      {/* Equipment Dunnage Pad with Safety Yellow Perimeter Warning Line */}
+      <mesh position={[0, 0.15, 0]}>
+        <boxGeometry args={[14, 0.3, 26]} />
+        <meshStandardMaterial color={isSelected ? "#38bdf8" : "#334155"} roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 0.16, 12.8]}>
+        <boxGeometry args={[13.8, 0.05, 0.4]} />
+        <meshStandardMaterial color="#eab308" />
+      </mesh>
+      <mesh position={[0, 0.16, -12.8]}>
+        <boxGeometry args={[13.8, 0.05, 0.4]} />
+        <meshStandardMaterial color="#eab308" />
       </mesh>
 
-      {/* Twin-Screw Compressors (60Hz / 120Hz Mechanical Vibration Source) */}
-      <group position={[0, 1.1, -1.8]}>
-        {[-1.2, 1.2].map((cx) => (
-          <group key={cx} position={[cx, 0, 0]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
+      {/* Subterranean Excavation Walls */}
+      {item.placement === "underground" && (
+        <group>
+          <mesh position={[8, 3, 0]}><boxGeometry args={[0.8, 6, 28]} /><meshStandardMaterial color="#1e293b" /></mesh>
+          <mesh position={[-8, 3, 0]}><boxGeometry args={[0.8, 6, 28]} /><meshStandardMaterial color="#1e293b" /></mesh>
+          <mesh position={[0, 3, 14]}><boxGeometry args={[16, 6, 0.8]} /><meshStandardMaterial color="#1e293b" /></mesh>
+          <mesh position={[0, 3, -14]}><boxGeometry args={[16, 6, 0.8]} /><meshStandardMaterial color="#1e293b" /></mesh>
+        </group>
+      )}
+
+      {/* 3 Modular V-Bank Chiller Units */}
+      <group rotation={[0, radAngle, 0]}>
+        {[-8.5, 0, 8.5].map((chillerZ, idx) => (
+          <group key={idx} position={[0, 0, chillerZ]}>
+            {/* Structural Skid Frame */}
+            <mesh position={[0, 0.4, 0]}>
+              <boxGeometry args={[4.8, 0.8, 7.8]} />
+              <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.4} />
+            </mesh>
+            {/* Twin Screw Compressors */}
+            <mesh position={[0, 1.1, -1.8]} rotation={[Math.PI / 2, 0, 0]}>
               <cylinderGeometry args={[0.65, 0.65, 2.8, 16]} />
-              <meshStandardMaterial
-                color={acousticSilencers ? "#064e3b" : "#3b82f6"} // Green if sound blanket installed
-                metalness={0.7}
-              />
+              <meshStandardMaterial color={item.silencers ? "#064e3b" : "#2563eb"} metalness={0.7} />
             </mesh>
-            {acousticSilencers && (
-              <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[1.5, 1.5, 3.0]} />
-                <meshStandardMaterial color="#047857" transparent opacity={0.75} />
-              </mesh>
-            )}
-          </group>
-        ))}
-      </group>
-
-      {/* V-Bank Condenser Aluminum Coils */}
-      <mesh position={[-1.2, 2.5, 0]} rotation={[0, 0, Math.PI / 8]}>
-        <boxGeometry args={[0.3, 3.2, 7.8]} />
-        <meshStandardMaterial color="#64748b" metalness={0.8} />
-      </mesh>
-      <mesh position={[1.2, 2.5, 0]} rotation={[0, 0, -Math.PI / 8]}>
-        <boxGeometry args={[0.3, 3.2, 7.8]} />
-        <meshStandardMaterial color="#64748b" metalness={0.8} />
-      </mesh>
-
-      {/* 4 High-Flow Axial Condenser Fans (Rotates dynamically) */}
-      <group position={[0, 4.2 + fanLift, 0]}>
-        {[
-          [-1.1, -2.2],
-          [1.1, -2.2],
-          [-1.1, 2.2],
-          [1.1, 2.2],
-        ].map(([fx, fz], idx) => (
-          <group key={idx} position={[fx, 0, fz]}>
-            {/* Fan Cowl Shroud */}
-            <mesh>
-              <cylinderGeometry args={[1.05, 1.05, 0.6, 16, 1, true]} />
-              <meshStandardMaterial color="#0f172a" side={DoubleSide} />
+            {/* V-Bank Coils */}
+            <mesh position={[-1.2, 2.5, 0]} rotation={[0, 0, Math.PI / 8]}>
+              <boxGeometry args={[0.3, 3.2, 7.4]} />
+              <meshStandardMaterial color="#64748b" metalness={0.8} />
             </mesh>
-            {/* Rotating Fan Blades */}
-            <group ref={fans[idx]}>
-              {[0, 1, 2, 3, 4].map((blade) => (
-                <mesh key={blade} rotation={[0, (blade * Math.PI) / 2.5, 0]}>
-                  <boxGeometry args={[1.8, 0.05, 0.3]} />
-                  <meshStandardMaterial color="#0284c7" />
-                </mesh>
+            <mesh position={[1.2, 2.5, 0]} rotation={[0, 0, -Math.PI / 8]}>
+              <boxGeometry args={[0.3, 3.2, 7.4]} />
+              <meshStandardMaterial color="#64748b" metalness={0.8} />
+            </mesh>
+            {/* 4 Condenser Fans */}
+            <group position={[0, 4.2, 0]}>
+              {[[-1.1, -2.0], [1.1, -2.0], [-1.1, 2.0], [1.1, 2.0]].map(([fx, fz], fIdx) => (
+                <group key={fIdx} position={[fx, 0, fz]}>
+                  <mesh>
+                    <cylinderGeometry args={[1.0, 1.0, 0.6, 16, 1, true]} />
+                    <meshStandardMaterial color="#0f172a" side={DoubleSide} />
+                  </mesh>
+                  <group ref={fans[fIdx]}>
+                    {[0, 1, 2, 3].map((blade) => (
+                      <mesh key={blade} rotation={[0, (blade * Math.PI) / 2, 0]}>
+                        <boxGeometry args={[1.7, 0.05, 0.3]} />
+                        <meshStandardMaterial color="#0284c7" />
+                      </mesh>
+                    ))}
+                  </group>
+                </group>
               ))}
             </group>
           </group>
@@ -551,411 +792,168 @@ function VBankChillerUnit({ position, running, fanSpeedPercent, explodedProgress
 }
 
 /**
- * Outdoor Chiller Plant Yard with Placement Architecture
+ * Draggable Acoustic Barrier Wall Piece
  */
-function ChillerYard({
-  placement,
-  running,
-  fanSpeedPercent,
-  orientationAngle,
-  explodedProgress = 0,
-  compoundOffset = [0, 0],
-  acousticSilencers = false,
-}) {
-  let yardX = 2 + compoundOffset[0];
-  let yardY = 0;
-  let yardZ = compoundOffset[1];
+function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
+  const height = item.height || 8;
+  const length = item.length || 28;
+  const rot = ((item.rotation || 0) * Math.PI) / 180;
+  const materialConfig = WALL_MATERIALS[item.material] || WALL_MATERIALS.absorptive_metal;
+  const isTransparent = item.material === "transparent_acrylic";
 
-  if (placement === "rear_shielded") {
-    yardX = -38 + compoundOffset[0];
-  } else if (placement === "rooftop") {
-    yardX = -18 + compoundOffset[0];
-    yardY = 8.5;
-  } else if (placement === "underground") {
-    yardY = -5.5; // Excavated 5.5m below grade
-  } else if (placement === "semi_berm") {
-    yardY = -2.2;
-  }
-
-  const radAngle = (orientationAngle * Math.PI) / 180;
-
-  return (
-    <group position={[yardX, yardY, yardZ]}>
-      {/* Subterranean Vault Concrete Excavation Walls & Ramp */}
-      {placement === "underground" && (
-        <group>
-          {/* Bunker Floor */}
-          <mesh position={[0, -0.2, 0]}>
-            <boxGeometry args={[18, 0.4, 28]} />
-            <meshStandardMaterial color="#0f172a" roughness={0.8} />
-          </mesh>
-          {/* North, South, East, West Retaining Walls */}
-          <mesh position={[9, 3, 0]}>
-            <boxGeometry args={[0.8, 6, 28]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-          <mesh position={[-9, 3, 0]}>
-            <boxGeometry args={[0.8, 6, 28]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-          <mesh position={[0, 3, 14]}>
-            <boxGeometry args={[18, 6, 0.8]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-          <mesh position={[0, 3, -14]}>
-            <boxGeometry args={[18, 6, 0.8]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-        </group>
-      )}
-
-      {/* Semi-Bermed Sloped Earthen Berms */}
-      {placement === "semi_berm" && (
-        <group position={[0, 1.2, 0]}>
-          <mesh position={[7.5, 0, 0]} rotation={[0, 0, -Math.PI / 4]}>
-            <boxGeometry args={[4.5, 3.5, 26]} />
-            <meshStandardMaterial color="#1f3a25" roughness={0.9} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Chiller Skid Units Array (3 Modular 400-Ton Units) */}
-      <group rotation={[0, radAngle, 0]}>
-        {[-9, 0, 9].map((chillerZ, idx) => (
-          <VBankChillerUnit
-            key={idx}
-            position={[0, 0, chillerZ]}
-            running={running}
-            fanSpeedPercent={fanSpeedPercent}
-            explodedProgress={explodedProgress}
-            acousticSilencers={acousticSilencers}
-          />
-        ))}
-      </group>
-    </group>
-  );
-}
-
-/**
- * Full Multi-Sided Acoustic Barrier Wall System
- * Dynamically updates height, material, and enclosure configuration (Single / U-Cowl / 4-Sided)
- */
-function AcousticBarrierWall({
-  enabled,
-  heightMeters = 8,
-  materialId = "absorptive_metal",
-  placement,
-  wallOffset = [0, 0],
-  wallEnclosure = "single_east", // "single_east" | "u_shape" | "full_4side"
-  isDraggable = false,
-}) {
-  if (!enabled || heightMeters <= 0) return null;
-
-  const materialConfig = WALL_MATERIALS[materialId] || WALL_MATERIALS.absorptive_metal;
-  const isTransparent = materialId === "transparent_acrylic";
-
-  let wallX = 10 + wallOffset[0];
-  let wallY = 0;
-  let wallZ = 0 + wallOffset[1];
-
-  if (placement === "rear_shielded") {
-    wallX = -46 + wallOffset[0];
-  } else if (placement === "rooftop") {
-    wallX = -9 + wallOffset[0];
-    wallY = 8.5;
-  } else if (placement === "underground") {
-    wallY = 0; // Wall sits on ground above vault lip
-  }
-
-  // Floating 3D Dimension Callout Tag above Wall
   const dimensionTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 384;
-    canvas.height = 100;
+    canvas.width = 300;
+    canvas.height = 70;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
     if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 384, 100, 16);
+      ctx.roundRect(0, 0, 300, 70, 10);
     } else {
-      ctx.rect(0, 0, 384, 100);
+      ctx.rect(0, 0, 300, 70);
     }
     ctx.fill();
-    ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.font = "bold 28px monospace";
-    ctx.fillStyle = "#38bdf8";
-    ctx.fillText(`H = ${heightMeters}.0m WALL`, 192, 40);
-
-    ctx.font = "bold 18px sans-serif";
-    ctx.fillStyle = "#34d399";
-    ctx.fillText(`${materialConfig.name.split(" ")[0]} (NRC: ${materialConfig.nrcRating})`, 192, 74);
+    ctx.font = "bold 26px monospace";
+    ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
+    ctx.fillText(`WALL: H = ${height}.0m`, 150, 44);
 
     return new CanvasTexture(canvas);
-  }, [heightMeters, materialConfig]);
+  }, [height, isSelected]);
 
   useEffect(() => () => dimensionTexture.dispose(), [dimensionTexture]);
 
   return (
-    <group position={[wallX, wallY, wallZ]}>
-      {/* 1. Main East Wall (Facing Community) */}
-      <mesh position={[0, heightMeters / 2, 0]}>
-        <boxGeometry args={[0.45, heightMeters, 32]} />
+    <group
+      position={[item.x, 0, item.z]}
+      rotation={[0, rot, 0]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(item.id);
+        onPointerDown(item.id, e);
+      }}
+    >
+      {isSelected && <SelectionRing radius={length / 2 + 2} label="WALL · DRAGGABLE" />}
+
+      {/* Main Wall Slab */}
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[0.55, height, length]} />
         <meshStandardMaterial
-          color={materialConfig.color}
+          color={isSelected ? "#0284c7" : materialConfig.color}
           roughness={isTransparent ? 0.05 : 0.6}
-          metalness={materialId === "absorptive_metal" ? 0.7 : 0.1}
+          metalness={item.material === "absorptive_metal" ? 0.7 : 0.1}
           transparent={isTransparent}
           opacity={isTransparent ? 0.45 : 1.0}
         />
       </mesh>
 
-      {/* Structural Steel I-Beam Columns along East Wall */}
-      {[-14, -10, -6, -2, 2, 6, 10, 14].map((z) => (
-        <mesh key={z} position={[0.28, heightMeters / 2, z]}>
-          <boxGeometry args={[0.35, heightMeters + 0.3, 0.3]} />
+      {/* Structural Steel Columns */}
+      {[-12, -6, 0, 6, 12].map((z) => (
+        <mesh key={z} position={[0.3, height / 2, z]}>
+          <boxGeometry args={[0.35, height + 0.3, 0.35]} />
           <meshStandardMaterial color="#0f172a" metalness={0.9} />
         </mesh>
       ))}
 
-      {/* 2. U-Shaped Cowl Wings (North & South Returns) */}
-      {(wallEnclosure === "u_shape" || wallEnclosure === "full_4side") && (
-        <group>
-          {/* North Return Wall */}
-          <mesh position={[-7, heightMeters / 2, -16]}>
-            <boxGeometry args={[14, heightMeters, 0.45]} />
-            <meshStandardMaterial
-              color={materialConfig.color}
-              roughness={isTransparent ? 0.05 : 0.6}
-              transparent={isTransparent}
-              opacity={isTransparent ? 0.45 : 1.0}
-            />
-          </mesh>
-          {/* South Return Wall */}
-          <mesh position={[-7, heightMeters / 2, 16]}>
-            <boxGeometry args={[14, heightMeters, 0.45]} />
-            <meshStandardMaterial
-              color={materialConfig.color}
-              roughness={isTransparent ? 0.05 : 0.6}
-              transparent={isTransparent}
-              opacity={isTransparent ? 0.45 : 1.0}
-            />
-          </mesh>
-        </group>
-      )}
-
-      {/* 3. Full 4-Sided Yard Enclosure (West Closure) */}
-      {wallEnclosure === "full_4side" && (
-        <mesh position={[-14, heightMeters / 2, 0]}>
-          <boxGeometry args={[0.45, heightMeters, 32]} />
-          <meshStandardMaterial
-            color={materialConfig.color}
-            roughness={isTransparent ? 0.05 : 0.6}
-            transparent={isTransparent}
-            opacity={isTransparent ? 0.45 : 1.0}
-          />
-        </mesh>
-      )}
-
-      {/* Floating Elevation / Height Dimension Billboard Tag */}
-      <sprite position={[0, heightMeters + 2.4, 0]} scale={[7.5, 2.0, 1]}>
+      {/* Floating 3D Dimension Tag */}
+      <sprite position={[0, height + 1.8, 0]} scale={[6.0, 1.4, 1]}>
         <spriteMaterial map={dimensionTexture} depthTest={false} />
       </sprite>
-
-      {/* Vertical Elevation Guide Line */}
-      <mesh position={[0, heightMeters / 2, 16.5]}>
-        <cylinderGeometry args={[0.04, 0.04, heightMeters, 6]} />
-        <meshBasicMaterial color="#38bdf8" />
-      </mesh>
     </group>
   );
 }
 
 /**
- * Procedural Tree Model
+ * Draggable Tree Buffer Cluster
  */
-function ProceduralTree({ position, species }) {
-  const isConical = species.foliageShape === "conical" || species.foliageShape === "tall_conical";
-  const isColumnar = species.foliageShape === "columnar";
-  const isPyramidal = species.foliageShape === "pyramidal";
+function DraggableTreeCluster({ item, isSelected, onSelect, onPointerDown }) {
+  const depth = item.depth || 16;
+  const species = REGIONAL_TREE_SPECIES[item.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+
+  const clusterTrees = useMemo(() => {
+    const list = [];
+    const count = Math.max(6, Math.min(16, Math.round(depth * 0.7)));
+    for (let i = 0; i < count; i++) {
+      const offsetX = ((i % 3) - 1) * 3.5 + (((i * 7) % 5) - 2) * 0.8;
+      const offsetZ = Math.floor(i / 3) * 4.5 - (count * 1.5) + (((i * 11) % 5) - 2) * 0.8;
+      list.push([offsetX, offsetZ]);
+    }
+    return list;
+  }, [depth]);
 
   return (
-    <group position={position}>
-      {/* Trunk */}
-      <mesh position={[0, 1.2, 0]}>
-        <cylinderGeometry args={[0.2, 0.35, 2.4, 8]} />
-        <meshStandardMaterial color={species.trunkColor || "#3e2723"} roughness={0.9} />
-      </mesh>
-      {/* Species-Specific Foliage */}
-      {isConical && (
-        <group position={[0, 3.8, 0]}>
-          <mesh position={[0, -0.6, 0]}>
-            <coneGeometry args={[2.0, 3.4, 8]} />
-            <meshStandardMaterial color={species.color} roughness={0.8} />
-          </mesh>
+    <group
+      position={[item.x, 0, item.z]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(item.id);
+        onPointerDown(item.id, e);
+      }}
+    >
+      {isSelected && <SelectionRing radius={depth / 2 + 3} label="TREES · DRAGGABLE" />}
+
+      {clusterTrees.map(([ox, oz], idx) => (
+        <group key={idx} position={[ox, 0, oz]}>
           <mesh position={[0, 1.2, 0]}>
-            <coneGeometry args={[1.4, 2.8, 8]} />
-            <meshStandardMaterial color={species.color} roughness={0.8} />
+            <cylinderGeometry args={[0.2, 0.35, 2.4, 8]} />
+            <meshStandardMaterial color={species.trunkColor || "#3e2723"} roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 3.8, 0]}>
+            <coneGeometry args={[1.8, 3.8, 8]} />
+            <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 5.2, 0]}>
+            <coneGeometry args={[1.3, 3.0, 8]} />
+            <meshStandardMaterial color={isSelected ? "#4ade80" : species.color} roughness={0.8} />
           </mesh>
         </group>
-      )}
-      {isColumnar && (
-        <mesh position={[0, 3.2, 0]}>
-          <cylinderGeometry args={[0.8, 1.1, 4.4, 8]} />
-          <meshStandardMaterial color={species.color} roughness={0.8} />
-        </mesh>
-      )}
-      {isPyramidal && (
-        <mesh position={[0, 3.0, 0]}>
-          <coneGeometry args={[1.8, 4.2, 7]} />
-          <meshStandardMaterial color={species.color} roughness={0.8} />
-        </mesh>
-      )}
-      {!isConical && !isColumnar && !isPyramidal && (
-        <mesh position={[0, 3.6, 0]}>
-          <sphereGeometry args={[2.0, 8, 8]} />
-          <meshStandardMaterial color={species.color} roughness={0.8} />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-/**
- * Multi-Sided Bio-Acoustic Buffer Belt (East Buffer vs 360° Perimeter Belt)
- */
-function VegetationBufferZone({
-  enabled,
-  depthMeters = 20,
-  treeSpeciesId,
-  treeArrangement = "east_buffer",
-  treeOffset = [0, 0],
-}) {
-  if (!enabled || depthMeters <= 0) return null;
-
-  const species = REGIONAL_TREE_SPECIES[treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
-  const rows = Math.max(1, Math.min(8, Math.round(depthMeters / 6)));
-
-  const trees = useMemo(() => {
-    const list = [];
-    const startX = 18 + treeOffset[0];
-    const spacingX = Math.min(5.5, depthMeters / rows);
-
-    // East Residential Buffer Rows
-    for (let r = 0; r < rows; r++) {
-      const x = startX + r * spacingX;
-      for (let z = -28 + treeOffset[1]; z <= 28 + treeOffset[1]; z += 5) {
-        const jitterZ = ((r % 2) - 0.5) * 2.0;
-        list.push([x, 0, z + jitterZ]);
-      }
-    }
-
-    // 360-Degree Perimeter Ring Belt (North, South, and West)
-    if (treeArrangement === "perimeter_ring") {
-      // North & South Perimeter Belts
-      for (let r = 0; r < Math.min(3, rows); r++) {
-        for (let x = -40; x <= 16; x += 6) {
-          list.push([x, 0, -32 - r * 4]); // North boundary
-          list.push([x, 0, 32 + r * 4]);  // South boundary
-        }
-      }
-      // West Buffer
-      for (let r = 0; r < Math.min(2, rows); r++) {
-        for (let z = -24; z <= 24; z += 6) {
-          list.push([-42 - r * 4, 0, z]);
-        }
-      }
-    }
-
-    return list;
-  }, [rows, depthMeters, treeOffset, treeArrangement]);
-
-  return (
-    <group>
-      {trees.map((pos, idx) => (
-        <ProceduralTree key={idx} position={pos} species={species} />
       ))}
     </group>
   );
 }
 
 /**
- * Concentric Noise Circles with dBA Labels & Distance
+ * Draggable Acoustic Probe (Community Sound Sensor)
  */
-function ConcentricNoiseCircles({ isophoneRadii, chillerPlacement, originPos = [2, 0, 0] }) {
-  let originX = originPos[0];
-  if (chillerPlacement === "rear_shielded") originX = -38;
-  else if (chillerPlacement === "rooftop") originX = -18;
-
-  const getColorForDba = (dba) => {
-    if (dba >= 75) return "#ef4444"; // Red
-    if (dba >= 65) return "#f97316"; // Orange
-    if (dba >= 55) return "#eab308"; // Amber
-    if (dba >= 45) return "#10b981"; // Green
-    return "#38bdf8"; // Cyan
-  };
-
-  const meterToSceneScale = (m) => Math.max(4, Math.min(75, 3 + (m / 600) * 52));
-
-  return (
-    <group position={[originX, 0.08, originPos[2]]} rotation={[-Math.PI / 2, 0, 0]}>
-      {isophoneRadii.map((ring, idx) => {
-        const sceneRadius = meterToSceneScale(ring.radiusMeters);
-        const color = getColorForDba(ring.targetDba);
-
-        return (
-          <group key={ring.targetDba}>
-            <mesh position={[0, 0, 0.005 * (idx + 1)]}>
-              <ringGeometry args={[sceneRadius - 0.25, sceneRadius + 0.25, 64]} />
-              <meshBasicMaterial color={color} transparent opacity={0.65} side={DoubleSide} />
-            </mesh>
-          </group>
-        );
-      })}
-    </group>
-  );
-}
-
-/**
- * Interactive Noise Pointer Probe Tool
- */
-function InteractiveNoiseProbe({ probePos, probeTelemetry, onPointerDown }) {
+function DraggableProbe({ item, isSelected, probeTelemetry, onSelect, onPointerDown }) {
   const probeSprite = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 440;
-    canvas.height = 140;
+    canvas.width = 380;
+    canvas.height = 110;
     const ctx = canvas.getContext("2d");
 
-    ctx.fillStyle = "#0b1626";
+    ctx.fillStyle = "rgba(11, 22, 38, 0.95)";
     if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 440, 140, 16);
+      ctx.roundRect(0, 0, 380, 110, 14);
     } else {
-      ctx.rect(0, 0, 440, 140);
+      ctx.rect(0, 0, 380, 110);
     }
     ctx.fill();
 
     const isComp = probeTelemetry ? probeTelemetry.isCompliant : true;
     ctx.strokeStyle = isComp ? "#34d399" : "#ef4444";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3.5;
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.font = "bold 40px monospace";
+    ctx.font = "bold 34px monospace";
     ctx.fillStyle = isComp ? "#34d399" : "#ef4444";
     const dbaText = probeTelemetry ? `${probeTelemetry.netDba.toFixed(1)} dBA` : "-- dBA";
-    ctx.fillText(dbaText, 220, 52);
+    ctx.fillText(dbaText, 190, 44);
 
-    ctx.font = "bold 20px sans-serif";
+    ctx.font = "bold 18px sans-serif";
     ctx.fillStyle = "#cbd5e1";
     const distText = probeTelemetry ? `${probeTelemetry.distanceMeters}m from plant` : "";
-    ctx.fillText(distText, 220, 88);
+    ctx.fillText(distText, 190, 78);
 
-    ctx.font = "16px sans-serif";
-    ctx.fillStyle = "#94a3b8";
-    const sensText = probeTelemetry ? probeTelemetry.sensation : "";
-    ctx.fillText(sensText, 220, 120);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = isComp ? "#a7f3d0" : "#fca5a5";
+    const sensText = probeTelemetry ? (isComp ? "✓ Peaceful Sleep" : "⚠️ Loud Complaint Risk") : "";
+    ctx.fillText(sensText, 190, 100);
 
     return new CanvasTexture(canvas);
   }, [probeTelemetry]);
@@ -963,21 +961,25 @@ function InteractiveNoiseProbe({ probePos, probeTelemetry, onPointerDown }) {
   useEffect(() => () => probeSprite.dispose(), [probeSprite]);
 
   return (
-    <group position={[probePos[0], 0, probePos[1]]}>
-      {/* Ground Target Ring */}
+    <group
+      position={[item.x, 0, item.z]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(item.id);
+        onPointerDown(item.id, e);
+      }}
+    >
+      {isSelected && <SelectionRing radius={4} label="SENSOR · DRAGGABLE" />}
+
       <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[1.5, 2.2, 32]} />
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.8} side={DoubleSide} />
       </mesh>
-
-      {/* Holographic Probe Mast */}
-      <mesh position={[0, 3.5, 0]} onPointerDown={onPointerDown}>
+      <mesh position={[0, 3.5, 0]}>
         <cylinderGeometry args={[0.08, 0.12, 7, 12]} />
         <meshStandardMaterial color="#38bdf8" metalness={0.9} emissive="#0284c7" emissiveIntensity={0.5} />
       </mesh>
-
-      {/* Glowing Sensor Tip */}
-      <mesh position={[0, 7.2, 0]} onPointerDown={onPointerDown}>
+      <mesh position={[0, 7.2, 0]}>
         <sphereGeometry args={[0.45, 16, 16]} />
         <meshStandardMaterial
           color={probeTelemetry?.isCompliant ? "#34d399" : "#ef4444"}
@@ -985,11 +987,39 @@ function InteractiveNoiseProbe({ probePos, probeTelemetry, onPointerDown }) {
           emissiveIntensity={0.9}
         />
       </mesh>
-
-      {/* Billboard Telemetry */}
-      <sprite position={[0, 10.2, 0]} scale={[8.5, 3.0, 1]}>
+      <sprite position={[0, 9.8, 0]} scale={[7.5, 2.2, 1]}>
         <spriteMaterial map={probeSprite} depthTest={false} transparent />
       </sprite>
+    </group>
+  );
+}
+
+/**
+ * Concentric Noise Isophone Heat Rings
+ */
+function ConcentricNoiseRings({ centerPos, radii }) {
+  const getColorForDba = (dba) => {
+    if (dba >= 75) return "#ef4444";
+    if (dba >= 65) return "#f97316";
+    if (dba >= 55) return "#eab308";
+    if (dba >= 45) return "#10b981";
+    return "#38bdf8";
+  };
+
+  return (
+    <group position={[centerPos[0], 0.08, centerPos[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+      {radii.map((ring, idx) => {
+        const color = getColorForDba(ring.targetDba);
+        const radius = Math.max(3, ring.radius);
+        return (
+          <group key={ring.targetDba}>
+            <mesh position={[0, 0, 0.005 * (idx + 1)]}>
+              <ringGeometry args={[radius - 0.25, radius + 0.25, 64]} />
+              <meshBasicMaterial color={color} transparent opacity={0.65} side={DoubleSide} />
+            </mesh>
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -1015,356 +1045,697 @@ class WebGLBoundary extends Component {
 }
 
 /**
- * Master 3D Spatial Acoustic Sandbox
+ * MASTER 3D INTERACTIVE ACOUSTIC DIGITAL TWIN
+ * Clean, modern, CAD-grade drag-and-drop spatial sandbox
  */
 export default function AcousticSiteSandbox3D({
   site,
-  config,
-  acousticResults,
   running,
-  itPowerKw,
-  fanSpeedPercent,
+  itPowerKw = 500,
+  fanSpeedPercent = 75,
   timeOfDay = "night",
   onChangeTimeOfDay,
+  onOpenReport,
 }) {
-  const [explodedProgress, setExplodedProgress] = useState(0);
-  const [isExplodingAuto, setIsExplodingAuto] = useState(false);
+  const [navMode, setNavMode] = useState("orbit"); // "orbit" | "pan"
+  const [cameraPreset, setCameraPreset] = useState("reset");
+  const [selectedId, setSelectedId] = useState(null);
+  const [isDragging, setIsDragging] = useState(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
 
-  // Sound Probe Coordinates [X, Z]
-  const [probePos, setProbePos] = useState([32, 0]);
-  const [isDraggingProbe, setIsDraggingProbe] = useState(false);
-  const [dragMode, setDragMode] = useState("probe"); // "probe" | "wall" | "trees" | "chillers"
+  // Initialize Layout Items for Site
+  const [layoutItems, setLayoutItems] = useState(() => [
+    {
+      id: "chiller_compound",
+      type: "chiller",
+      x: 2,
+      z: 0,
+      placement: "side_exposed",
+      silencers: false,
+      rotation: 0,
+    },
+    {
+      id: "wall_1",
+      type: "wall",
+      x: 12,
+      z: 0,
+      height: 8,
+      length: 28,
+      rotation: 0,
+      material: "absorptive_metal",
+    },
+    {
+      id: "tree_1",
+      type: "tree_cluster",
+      x: 24,
+      z: 0,
+      depth: 16,
+      speciesId: site.recommendedTreeId || "virginia_pine",
+    },
+    {
+      id: "probe_1",
+      type: "probe",
+      x: 42,
+      z: 0,
+    },
+  ]);
 
-  const [wallOffset, setWallOffset] = useState([0, 0]);
-  const [treeOffset, setTreeOffset] = useState([0, 0]);
-  const [compoundOffset, setCompoundOffset] = useState([0, 0]);
-
-  // Exploded Auto-Animation
+  // Reset layout to default when site changes
   useEffect(() => {
-    if (!isExplodingAuto) return;
-    let dir = 1;
-    const interval = setInterval(() => {
-      setExplodedProgress((prev) => {
-        if (prev >= 1) dir = -1;
-        if (prev <= 0) dir = 1;
-        return Math.max(0, Math.min(1, prev + dir * 0.05));
-      });
-    }, 40);
-    return () => clearInterval(interval);
-  }, [isExplodingAuto]);
+    setLayoutItems([
+      {
+        id: "chiller_compound",
+        type: "chiller",
+        x: site.id === "the_dalles_or" ? -38 : 2,
+        z: 0,
+        placement: site.id === "the_dalles_or" ? "rear_shielded" : "side_exposed",
+        silencers: site.id === "dublin_ie",
+        rotation: 0,
+      },
+      {
+        id: "wall_1",
+        type: "wall",
+        x: 12,
+        z: 0,
+        height: site.id === "phoenix_az" ? 10 : 8,
+        length: 28,
+        rotation: 0,
+        material: site.id === "the_dalles_or" ? "mass_timber" : "absorptive_metal",
+      },
+      {
+        id: "tree_1",
+        type: "tree_cluster",
+        x: 24,
+        z: 0,
+        depth: 16,
+        speciesId: site.recommendedTreeId || "virginia_pine",
+      },
+      {
+        id: "probe_1",
+        type: "probe",
+        x: 42,
+        z: 0,
+      },
+    ]);
+    setSelectedId(null);
+  }, [site]);
 
-  // Isophone Radii
-  const isophoneRadii = useMemo(() => {
-    return calculateIsophoneRadii({
-      targetDbaLevels: [75, 65, 55, 45, 40],
-      itPowerKw,
-      ambientTempC: site.ambientTempC,
-      fanSpeedPercent,
-      terrainEchoDb: site.terrainEchoAmplificationDb,
-      chillerPlacement: config.placement,
-      wallHeightMeters: config.wallHeightMeters,
-      wallMaterial: config.wallMaterial,
-      wallEnabled: config.wallEnabled,
-      wallEnclosure: config.wallEnclosure,
-      treeBufferDepthMeters: config.treeBufferDepthMeters,
-      treeSpeciesId: config.treeSpeciesId,
-      treeEnabled: config.treeEnabled,
-      chillerOrientationAngle: config.chillerOrientationAngle,
-      timeOfDay,
-      acousticSilencers: config.acousticSilencers,
-    });
-  }, [itPowerKw, site, fanSpeedPercent, config, timeOfDay]);
+  // Global Pointer Up listener to ensure drag release is always caught
+  useEffect(() => {
+    const handleUp = () => setIsDragging(null);
+    window.addEventListener("pointerup", handleUp);
+    return () => window.removeEventListener("pointerup", handleUp);
+  }, []);
 
-  // Probe Telemetry
-  const probeTelemetry = useMemo(() => {
-    let sourceX = 2 + compoundOffset[0];
-    let sourceZ = compoundOffset[1];
-    if (config.placement === "rear_shielded") sourceX = -38;
-    else if (config.placement === "rooftop") sourceX = -18;
+  // Keyboard Delete / Backspace support for selected items
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        if (!selectedId.startsWith("chiller") && !selectedId.startsWith("probe")) {
+          setLayoutItems((prev) => prev.filter((i) => i.id !== selectedId));
+          setSelectedId(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedId]);
 
-    const dx = probePos[0] - sourceX;
-    const dz = probePos[1] - sourceZ;
+  // Update item position during drag
+  const handleGroundPointerMove = (e) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+
+    const newX = Math.max(-50, Math.min(48, Math.round(e.point.x)));
+    const newZ = Math.max(-55, Math.min(55, Math.round(e.point.z)));
+
+    setLayoutItems((prev) =>
+      prev.map((item) =>
+        item.id === isDragging ? { ...item, x: newX, z: newZ } : item
+      )
+    );
+  };
+
+  const handleGroundPointerUp = () => {
+    setIsDragging(null);
+  };
+
+  // Add Wall
+  const handleAddWall = () => {
+    const newWall = {
+      id: `wall_${Date.now()}`,
+      type: "wall",
+      x: 12,
+      z: (Math.random() - 0.5) * 20,
+      height: 8,
+      length: 28,
+      rotation: 0,
+      material: "absorptive_metal",
+    };
+    setLayoutItems((prev) => [...prev, newWall]);
+    setSelectedId(newWall.id);
+  };
+
+  // Add Trees
+  const handleAddTrees = () => {
+    const newTrees = {
+      id: `tree_${Date.now()}`,
+      type: "tree_cluster",
+      x: 24,
+      z: (Math.random() - 0.5) * 20,
+      depth: 16,
+      speciesId: site.recommendedTreeId || "virginia_pine",
+    };
+    setLayoutItems((prev) => [...prev, newTrees]);
+    setSelectedId(newTrees.id);
+  };
+
+  // Delete Selected
+  const handleDeleteSelected = () => {
+    if (!selectedId) return;
+    if (selectedId.startsWith("chiller") || selectedId.startsWith("probe")) return;
+    setLayoutItems((prev) => prev.filter((i) => i.id !== selectedId));
+    setSelectedId(null);
+  };
+
+  // Update an item's property
+  const updateSelectedItem = (patch) => {
+    if (!selectedId) return;
+    setLayoutItems((prev) =>
+      prev.map((item) => (item.id === selectedId ? { ...item, ...patch } : item))
+    );
+  };
+
+  // Extract primary objects
+  const chiller = layoutItems.find((i) => i.type === "chiller") || {
+    x: 2,
+    z: 0,
+    placement: "side_exposed",
+    silencers: false,
+    rotation: 0,
+  };
+  const probe = layoutItems.find((i) => i.type === "probe") || { x: 42, z: 0 };
+  const walls = layoutItems.filter((i) => i.type === "wall");
+  const treeClusters = layoutItems.filter((i) => i.type === "tree_cluster");
+
+  const selectedItem = layoutItems.find((i) => i.id === selectedId);
+
+  // REAL-TIME ACOUSTIC CALCULATION BASED ON 3D PLACEMENT
+  const acousticResults = useMemo(() => {
+    // 1. Source Sound Power Lw
+    const tempPenalty = Math.max(0, (site.ambientTempC - 20) * 0.4);
+    const fanRatio = Math.max(0.2, fanSpeedPercent / 100);
+    const fanSpeedPenalty = 18 * Math.log10(fanRatio / 0.75);
+    const powerScale = 10 * Math.log10(Math.max(100, itPowerKw) / 500);
+    const baseLw = 108.0;
+    const sourceLw = baseLw + tempPenalty + fanSpeedPenalty + powerScale;
+
+    // 2. Real-World Distance Calculation from 3D Coordinates
+    const dx = probe.x - chiller.x;
+    const dz = probe.z - chiller.z;
     const sceneDist = Math.hypot(dx, dz);
-    const distanceMeters = Math.max(10, Math.round((sceneDist / 30) * site.defaultDistanceToHomesMeters));
+    const distanceMeters = Math.max(15, Math.round((sceneDist / 40) * site.defaultDistanceToHomesMeters));
+    const distanceDecay = 20 * Math.log10(distanceMeters) + 11;
 
-    return calculateNoiseAtPoint({
-      probeDistanceMeters: distanceMeters,
-      itPowerKw,
-      ambientTempC: site.ambientTempC,
-      fanSpeedPercent,
-      terrainEchoDb: site.terrainEchoAmplificationDb,
-      chillerPlacement: config.placement,
-      wallHeightMeters: config.wallHeightMeters,
-      wallMaterial: config.wallMaterial,
-      wallEnabled: config.wallEnabled,
-      wallEnclosure: config.wallEnclosure,
-      treeBufferDepthMeters: config.treeBufferDepthMeters,
-      treeSpeciesId: config.treeSpeciesId,
-      treeEnabled: config.treeEnabled,
-      chillerOrientationAngle: config.chillerOrientationAngle,
-      municipalNoiseLimitDba: acousticResults.activeLegalLimit || site.municipalNoiseLimitDba,
-      timeOfDay,
-      acousticSilencers: config.acousticSilencers,
-    });
-  }, [probePos, compoundOffset, config, itPowerKw, site, fanSpeedPercent, timeOfDay, acousticResults]);
-
-  // Pointer Handlers
-  const handleGroundClick = (e) => {
-    e.stopPropagation();
-    if (dragMode === "probe") {
-      setProbePos([e.point.x, e.point.z]);
+    // 3. Building Shielding
+    let buildingShieldingDb = 0;
+    if (chiller.x < -16 && probe.x > -4) {
+      buildingShieldingDb = 16.0;
     }
-  };
 
-  const handlePointerDown = (e) => {
-    e.stopPropagation();
-    setIsDraggingProbe(true);
-  };
+    // 4. Placement Attenuation
+    let placementAttenDb = 0;
+    if (chiller.placement === "underground") placementAttenDb = 28.0;
+    else if (chiller.placement === "semi_berm") placementAttenDb = 11.5;
+    else if (chiller.placement === "rear_shielded") placementAttenDb = 18.0;
 
-  const handlePointerMove = (e) => {
-    if (!isDraggingProbe) return;
-    const x = e.point.x;
-    const z = e.point.z;
-    if (dragMode === "probe") setProbePos([x, z]);
-    else if (dragMode === "wall") setWallOffset([x - 10, z]);
-    else if (dragMode === "trees") setTreeOffset([x - 18, z]);
-    else if (dragMode === "chillers") setCompoundOffset([x - 2, z]);
-  };
+    // 5. Intervening Barrier Walls Attenuation
+    let wallAttenDb = 0;
+    const minX = Math.min(chiller.x, probe.x);
+    const maxX = Math.max(chiller.x, probe.x);
 
-  const handlePointerUp = () => {
-    setIsDraggingProbe(false);
+    walls.forEach((w) => {
+      if (w.x > minX && w.x < maxX && Math.abs(w.z - (chiller.z + probe.z) / 2) < (w.length || 28) / 2 + 8) {
+        const mat = WALL_MATERIALS[w.material] || WALL_MATERIALS.absorptive_metal;
+        const thisWallDb = 4.2 + (w.height || 8) * 1.1 + (mat.nrcRating || 0.95) * 2.8;
+        wallAttenDb += thisWallDb;
+      }
+    });
+    wallAttenDb = Math.min(24.0, wallAttenDb);
+
+    // 6. Intervening Tree Buffer Attenuation
+    let treeAttenDb = 0;
+    treeClusters.forEach((t) => {
+      if (t.x > minX && t.x < maxX && Math.abs(t.z - (chiller.z + probe.z) / 2) < (t.depth || 16) + 10) {
+        const spec = REGIONAL_TREE_SPECIES[t.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+        const thisTreeDb = (t.depth || 16) * (spec.acousticAbsorptionCoeff || 0.18) * 2.0;
+        treeAttenDb += thisTreeDb;
+      }
+    });
+    treeAttenDb = Math.min(14.0, treeAttenDb);
+
+    // 7. Equipment Silencers & Directivity
+    const silencerDb = chiller.silencers ? 5.5 : 0;
+    const directivityDb = (chiller.rotation || 0) >= 135 ? 4.0 : 0;
+
+    // 8. Day vs Night Atmospheric Thermal Inversion
+    const inversionDb = timeOfDay === "night" ? 1.8 : -1.2;
+    const terrainEchoDb = site.terrainEchoAmplificationDb || 0;
+
+    // Net Received Noise at Community Sensor
+    const totalMitigationDb =
+      distanceDecay +
+      buildingShieldingDb +
+      placementAttenDb +
+      wallAttenDb +
+      treeAttenDb +
+      silencerDb +
+      directivityDb -
+      inversionDb -
+      terrainEchoDb;
+
+    const netReceivedLp = Math.max(25, sourceLw - totalMitigationDb);
+
+    const activeLimit =
+      timeOfDay === "day"
+        ? site.daytimeNoiseLimitDba || 55
+        : site.municipalNoiseLimitDba;
+    const isCompliant = netReceivedLp <= activeLimit;
+
+    return {
+      sourceLw: Math.round(sourceLw * 10) / 10,
+      netReceivedLp: Math.round(netReceivedLp * 10) / 10,
+      distanceMeters,
+      activeLimit,
+      isCompliant,
+      statusColor: isCompliant ? "#34d399" : "#ef4444",
+      statusText: isCompliant ? "COMPLIANT" : "EXCEEDS LIMIT",
+      breakdown: {
+        distanceDecay: Math.round(distanceDecay * 10) / 10,
+        buildingShieldingDb: Math.round(buildingShieldingDb * 10) / 10,
+        placementAttenDb: Math.round(placementAttenDb * 10) / 10,
+        wallAttenDb: Math.round(wallAttenDb * 10) / 10,
+        treeAttenDb: Math.round(treeAttenDb * 10) / 10,
+        silencerDb,
+      },
+    };
+  }, [chiller, probe, walls, treeClusters, site, fanSpeedPercent, itPowerKw, timeOfDay]);
+
+  // Live Sound Wave Isophone Radii
+  const isophoneRadii = useMemo(() => {
+    const netDba = acousticResults.netReceivedLp;
+    return [
+      { targetDba: 75, radius: Math.max(5, Math.min(45, (75 / netDba) * 10)) },
+      { targetDba: 65, radius: Math.max(8, Math.min(55, (65 / netDba) * 18)) },
+      { targetDba: 55, radius: Math.max(12, Math.min(70, (55 / netDba) * 26)) },
+      { targetDba: 45, radius: Math.max(16, Math.min(90, (45 / netDba) * 36)) },
+    ];
+  }, [acousticResults.netReceivedLp]);
+
+  // Sync Audio Synthesizer
+  useEffect(() => {
+    if (audioPlaying) {
+      acousticSimulator.setDecibels(acousticResults.netReceivedLp);
+      acousticSimulator.setTimeOfDay(timeOfDay);
+    }
+  }, [audioPlaying, acousticResults.netReceivedLp, timeOfDay]);
+
+  const toggleAudio = () => {
+    const isNowPlaying = acousticSimulator.toggle();
+    setAudioPlaying(isNowPlaying);
+    if (isNowPlaying) {
+      acousticSimulator.setDecibels(acousticResults.netReceivedLp);
+      acousticSimulator.setTimeOfDay(timeOfDay);
+    }
   };
 
   const isNight = timeOfDay === "night";
 
   return (
-    <div className="site-canvas-supercontainer" style={{ position: "relative", width: "100%" }}>
-      {/* 3D Viewport Controls HUD Overlay (Top-Left) */}
-      <div className="canvas-hud-toolbar">
-        {/* Day / Night Time-of-Day Switcher */}
-        <div className="hud-pill-group">
-          <span className="hud-label">ATMOSPHERE:</span>
+    <div className="canvas-interactive-wrapper" style={{ position: "relative", width: "100%", height: "720px" }}>
+      {/* =========================================================================
+          1. CLEAN FLOATING TOP HEADER PILL (Minimalist, Calm, Executive)
+          ========================================================================= */}
+      <div className="clean-floating-top-bar">
+        {/* Site Flag & Title */}
+        <div className="top-site-badge">
+          <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
+          <span className="top-site-name">{site.name}</span>
+          <span className="top-site-tag">SPATIAL TWIN</span>
+        </div>
+
+        {/* Day / Night Curfew Switcher */}
+        <div className="top-time-toggle">
           <button
-            className={`hud-btn-mini ${!isNight ? "selected" : ""}`}
+            className={`time-toggle-btn ${!isNight ? "active" : ""}`}
             onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
-            title="Simulate Daytime (Solar illumination, 55 dBA daytime ordinance, traffic ambient)"
           >
-            ☀️ Day (55 dBA)
+            ☀️ Day
           </button>
           <button
-            className={`hud-btn-mini ${isNight ? "selected" : ""}`}
+            className={`time-toggle-btn ${isNight ? "active" : ""}`}
             onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
-            title="Simulate Night Curfew (Nocturnal silence, 45 dBA curfew, thermal inversion)"
           >
-            🌙 Night Curfew (45 dBA)
+            🌙 Night Curfew
           </button>
         </div>
 
-        {/* Exploded Subsystem View Controls */}
-        <div className="hud-pill-group">
-          <button
-            className={`hud-btn ${explodedProgress > 0 ? "active" : ""}`}
-            onClick={() => {
-              setIsExplodingAuto(false);
-              setExplodedProgress(explodedProgress > 0 ? 0 : 1);
-            }}
-            title="Toggle Exploded CAD Disassembly View"
-          >
-            <span className="hud-icon">📐</span>
-            <span>Exploded: {Math.round(explodedProgress * 100)}%</span>
-          </button>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.02"
-            value={explodedProgress}
-            onChange={(e) => {
-              setIsExplodingAuto(false);
-              setExplodedProgress(parseFloat(e.target.value));
-            }}
-            className="hud-slider"
-          />
-        </div>
+        {/* Listen at Sensor Button */}
+        <button
+          className={`top-audio-btn ${audioPlaying ? "playing" : ""}`}
+          onClick={toggleAudio}
+          title="Click to hear synthesized noise at neighbor's property"
+        >
+          {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
+        </button>
 
-        {/* 3D Drag & Drop Mode Palette */}
-        <div className="hud-pill-group">
-          <span className="hud-label">ARRANGE 3D:</span>
-          <button
-            className={`hud-btn-mini ${dragMode === "probe" ? "selected" : ""}`}
-            onClick={() => setDragMode("probe")}
-          >
-            📍 Sound Probe
+        {/* Camera Perspective Reset */}
+        <div className="top-camera-group">
+          <button className="top-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D schematic">
+            🗺️ 2D Plan
           </button>
-          <button
-            className={`hud-btn-mini ${dragMode === "wall" ? "selected" : ""}`}
-            onClick={() => setDragMode("wall")}
-          >
-            🧱 Barrier Wall
+          <button className="top-cam-btn" onClick={() => setCameraPreset("reset")} title="Isometric 3D perspective">
+            ↺ 3D View
           </button>
-          <button
-            className={`hud-btn-mini ${dragMode === "trees" ? "selected" : ""}`}
-            onClick={() => setDragMode("trees")}
-          >
-            🌲 Tree Belt
-          </button>
-          <button
-            className={`hud-btn-mini ${dragMode === "chillers" ? "selected" : ""}`}
-            onClick={() => setDragMode("chillers")}
-          >
-            🌪️ Chiller Yard
-          </button>
-          {(wallOffset[0] !== 0 || treeOffset[0] !== 0 || compoundOffset[0] !== 0) && (
-            <button
-              className="hud-btn-mini reset"
-              onClick={() => {
-                setWallOffset([0, 0]);
-                setTreeOffset([0, 0]);
-                setCompoundOffset([0, 0]);
-              }}
-            >
-              ↺ Reset
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Real-time Interactive Probe Telemetry HUD Overlay (Top-Right) */}
-      <div className="canvas-probe-hud">
-        <div className="probe-hud-header">
-          <span className="probe-dot"></span>
-          <strong>ACOUSTIC PROBE (360° TERRAIN)</strong>
-          <span className="probe-hint">(Click/drag anywhere)</span>
+      {/* =========================================================================
+          2. CLEAN FLOATING DECIBEL STATUS CARD (Top Right)
+          ========================================================================= */}
+      <div className="clean-floating-decibel-card">
+        <div className="decibel-main-row">
+          <span className="decibel-number" style={{ color: acousticResults.statusColor }}>
+            {acousticResults.netReceivedLp.toFixed(1)}
+          </span>
+          <span className="decibel-unit">dBA</span>
+          <span
+            className="decibel-compliance-pill"
+            style={{
+              background: `${acousticResults.statusColor}22`,
+              color: acousticResults.statusColor,
+              borderColor: `${acousticResults.statusColor}66`,
+            }}
+          >
+            {acousticResults.statusText}
+          </span>
         </div>
-        <div className="probe-hud-metrics">
-          <div className="probe-metric-main">
-            <span
-              className="probe-dbs"
-              style={{ color: probeTelemetry.isCompliant ? "#34d399" : "#ef4444" }}
-            >
-              {probeTelemetry.netDba.toFixed(1)} <small>dBA</small>
-            </span>
-            <span className="probe-dbc">{probeTelemetry.netDbc.toFixed(1)} dBC</span>
-          </div>
-          <div className="probe-metric-detail">
-            <span>Distance: <strong>{probeTelemetry.distanceMeters}m</strong> from cooling plant</span>
-            <span>Limit: <strong>{acousticResults.activeLegalLimit || site.municipalNoiseLimitDba} dBA</strong> ({probeTelemetry.marginDb >= 0 ? `-${probeTelemetry.marginDb.toFixed(1)} dB safe` : `+${Math.abs(probeTelemetry.marginDb).toFixed(1)} dB OVER`})</span>
-            <span className="probe-sensation">{probeTelemetry.sensation}</span>
-          </div>
+        <div className="decibel-sub-row">
+          <span>
+            {acousticResults.distanceMeters}m from plant · {timeOfDay === "day" ? "Day" : "Night"} limit:{" "}
+            <strong>{acousticResults.activeLimit} dBA</strong>
+          </span>
+        </div>
+        <div className="decibel-hint">
+          {acousticResults.isCompliant ? "✓ Safe nocturnal sleep sanctuary" : "⚠️ Violates municipal noise ordinance"}
         </div>
       </div>
 
-      {/* 3D Canvas Viewport */}
+      {/* =========================================================================
+          3. MAIN 3D THREE.JS CANVAS
+          ========================================================================= */}
       <div
-        className="site-canvas-container"
         style={{
           width: "100%",
-          height: "640px",
-          borderRadius: "14px",
+          height: "100%",
+          borderRadius: "16px",
           overflow: "hidden",
-          border: "1px solid #1e2d42",
-          boxShadow: "0 12px 32px rgba(0, 0, 0, 0.4)",
+          border: "1px solid #1e293b",
+          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.4)",
         }}
       >
         <WebGLBoundary>
-          <Canvas camera={{ position: [34, 42, 60], fov: 45 }} dpr={[1, 1.5]}>
-            {/* Dynamic Sky & Lighting for Day / Night */}
+          <Canvas camera={{ position: [36, 44, 62], fov: 45 }} dpr={[1, 1.5]}>
             <color attach="background" args={[isNight ? "#030712" : "#38bdf8"]} />
-            <ambientLight intensity={isNight ? 0.35 : 1.8} />
+            <ambientLight intensity={isNight ? 0.4 : 1.8} />
             <directionalLight
               position={isNight ? [-25, 40, -30] : [35, 60, 40]}
               intensity={isNight ? 0.6 : 2.8}
               color={isNight ? "#93c5fd" : "#fffbeb"}
               castShadow
             />
-
-            {/* Night Security Floodlights for Chiller Yard */}
             {isNight && (
-              <group position={[2, 10, 0]}>
-                <pointLight intensity={35} distance={50} color="#f8fafc" />
+              <group position={[chiller.x, 10, chiller.z]}>
+                <pointLight intensity={30} distance={50} color="#f8fafc" />
               </group>
             )}
 
-            {/* Expansive Ground Terrain */}
-            <Ground
+            {/* Interactive Ground Plane with Security Fencing, Parking, and Retention Basin */}
+            <InteractiveGround
               terrainType={site.terrainType}
               timeOfDay={timeOfDay}
-              onGroundClick={handleGroundClick}
-              onGroundPointerDown={handlePointerDown}
-              onGroundPointerMove={handlePointerMove}
-              onGroundPointerUp={handlePointerUp}
+              onGroundPointerMove={handleGroundPointerMove}
+              onGroundPointerUp={handleGroundPointerUp}
+              onDeselect={() => setSelectedId(null)}
             />
 
-            {/* 360-Degree Realistic Surroundings (Subdivisions, Highways, Substations, Rivers, Canyons) */}
+            {/* 360 Surroundings (Residential Neighborhood East, Highway South, Substation West) */}
             <SurroundingLandscape site={site} timeOfDay={timeOfDay} />
 
-            {/* Data Center Architecture */}
-            <DataCenterBuilding
-              explodedProgress={explodedProgress}
-              buildingStyle={config.buildingStyle || "1story"}
-              timeOfDay={timeOfDay}
-            />
+            {/* Hyperscale Building with Rooftop HVAC, Loading Docks, and Parked Logistics Trailers */}
+            <DataCenterBuilding />
 
-            {/* Chiller Mechanical Yard */}
-            <ChillerYard
-              placement={config.placement}
+            {/* Draggable Chiller Compound */}
+            <DraggableChillerYard
+              item={chiller}
+              isSelected={selectedId === chiller.id}
               running={running}
               fanSpeedPercent={fanSpeedPercent}
-              orientationAngle={config.chillerOrientationAngle}
-              explodedProgress={explodedProgress}
-              compoundOffset={compoundOffset}
-              acousticSilencers={config.acousticSilencers}
+              onSelect={setSelectedId}
+              onPointerDown={(id) => setIsDragging(id)}
             />
 
-            {/* Multi-Sided Acoustic Barrier Wall System */}
-            <AcousticBarrierWall
-              enabled={config.wallEnabled}
-              heightMeters={config.wallHeightMeters}
-              materialId={config.wallMaterial}
-              placement={config.placement}
-              wallOffset={wallOffset}
-              wallEnclosure={config.wallEnclosure || "single_east"}
-              isDraggable={dragMode === "wall"}
+            {/* Draggable Barrier Walls */}
+            {walls.map((wall) => (
+              <DraggableWall
+                key={wall.id}
+                item={wall}
+                isSelected={selectedId === wall.id}
+                onSelect={setSelectedId}
+                onPointerDown={(id) => setIsDragging(id)}
+              />
+            ))}
+
+            {/* Draggable Tree Buffers */}
+            {treeClusters.map((trees) => (
+              <DraggableTreeCluster
+                key={trees.id}
+                item={trees}
+                isSelected={selectedId === trees.id}
+                onSelect={setSelectedId}
+                onPointerDown={(id) => setIsDragging(id)}
+              />
+            ))}
+
+            {/* Draggable Community Sound Sensor */}
+            <DraggableProbe
+              item={probe}
+              isSelected={selectedId === probe.id}
+              probeTelemetry={{
+                netDba: acousticResults.netReceivedLp,
+                distanceMeters: acousticResults.distanceMeters,
+                isCompliant: acousticResults.isCompliant,
+              }}
+              onSelect={setSelectedId}
+              onPointerDown={(id) => setIsDragging(id)}
             />
 
-            {/* Multi-Sided Bio-Acoustic Tree Belt */}
-            <VegetationBufferZone
-              enabled={config.treeEnabled}
-              depthMeters={config.treeBufferDepthMeters}
-              treeSpeciesId={config.treeSpeciesId}
-              treeArrangement={config.treeArrangement || "east_buffer"}
-              treeOffset={treeOffset}
-            />
+            {/* Concentric Isophone Circles */}
+            <ConcentricNoiseRings centerPos={[chiller.x, chiller.z]} radii={isophoneRadii} />
 
-            {/* ISO 9613-2 Concentric Noise Isophone Circles */}
-            <ConcentricNoiseCircles
-              isophoneRadii={isophoneRadii}
-              chillerPlacement={config.placement}
-              originPos={[2 + compoundOffset[0], 0, compoundOffset[1]]}
+            {/* Smooth Orbit / Pan Controls */}
+            <SiteCameraControls
+              navMode={navMode}
+              cameraPreset={cameraPreset}
+              isDragging={isDragging !== null}
             />
-
-            {/* Interactive Sound Probe */}
-            <InteractiveNoiseProbe
-              probePos={probePos}
-              probeTelemetry={probeTelemetry}
-              onPointerDown={handlePointerDown}
-            />
-
-            <SiteCameraControls isDragging={isDraggingProbe} />
           </Canvas>
         </WebGLBoundary>
       </div>
 
-      {/* Concentric Circle Legend Bar */}
-      <div className="concentric-legend-strip">
-        <span className="legend-title">CONCENTRIC NOISE CONTOURS (ISO 9613-2):</span>
-        <div className="legend-badges">
-          <span className="legend-badge red">🔴 75+ dBA (Machinery Roar)</span>
-          <span className="legend-badge orange">🟠 65 dBA (Industrial Zone)</span>
-          <span className="legend-badge amber">🟡 55 dBA (Daytime Limit)</span>
-          <span className="legend-badge green">🟢 45 dBA (Night Curfew Limit)</span>
-          <span className="legend-badge cyan">🔵 40 dBA (Quiet Sleep Sanctuary)</span>
+      {/* =========================================================================
+          4. CONTEXTUAL INSPECTOR PILL (Appears ONLY when an object is selected!)
+          ========================================================================= */}
+      {selectedItem && (
+        <div className="clean-floating-inspector-pill animated-slide-up">
+          {selectedItem.type === "wall" && (
+            <div className="inspector-content-row">
+              <span className="inspector-title">🧱 Barrier Wall</span>
+              <div className="inspector-actions">
+                <span className="inspector-label">Height:</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ height: Math.max(3, (selectedItem.height || 8) - 1) })}
+                  title="Decrease height"
+                >
+                  −
+                </button>
+                <span className="inspector-val">{selectedItem.height || 8}m</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ height: Math.min(16, (selectedItem.height || 8) + 1) })}
+                  title="Increase height"
+                >
+                  +
+                </button>
+
+                <button
+                  className="inspector-tool-btn"
+                  onClick={() => updateSelectedItem({ rotation: ((selectedItem.rotation || 0) + 90) % 180 })}
+                  title="Rotate wall 90 degrees"
+                >
+                  ⟳ Rotate
+                </button>
+
+                <button
+                  className="inspector-delete-btn"
+                  onClick={handleDeleteSelected}
+                  title="Delete this barrier wall"
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "tree_cluster" && (
+            <div className="inspector-content-row">
+              <span className="inspector-title">🌲 Tree Buffer</span>
+              <div className="inspector-actions">
+                <span className="inspector-label">Depth:</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ depth: Math.max(6, (selectedItem.depth || 16) - 4) })}
+                >
+                  −
+                </button>
+                <span className="inspector-val">{selectedItem.depth || 16}m</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ depth: Math.min(40, (selectedItem.depth || 16) + 4) })}
+                >
+                  +
+                </button>
+
+                <button
+                  className="inspector-delete-btn"
+                  onClick={handleDeleteSelected}
+                  title="Delete this tree cluster"
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "chiller" && (
+            <div className="inspector-content-row">
+              <span className="inspector-title">🏢 Chiller Yard</span>
+              <div className="inspector-actions">
+                <span className="inspector-label">Placement:</span>
+                <button
+                  className={`inspector-pill-choice ${selectedItem.placement === "side_exposed" ? "active" : ""}`}
+                  onClick={() => updateSelectedItem({ placement: "side_exposed" })}
+                >
+                  Surface
+                </button>
+                <button
+                  className={`inspector-pill-choice ${selectedItem.placement === "semi_berm" ? "active" : ""}`}
+                  onClick={() => updateSelectedItem({ placement: "semi_berm" })}
+                >
+                  Berm (-11.5dB)
+                </button>
+                <button
+                  className={`inspector-pill-choice ${selectedItem.placement === "underground" ? "active" : ""}`}
+                  onClick={() => updateSelectedItem({ placement: "underground" })}
+                >
+                  Bunker (-28dB)
+                </button>
+
+                <button
+                  className={`inspector-tool-btn ${selectedItem.silencers ? "active" : ""}`}
+                  onClick={() => updateSelectedItem({ silencers: !selectedItem.silencers })}
+                >
+                  {selectedItem.silencers ? "✓ Silencers (-5.5dB)" : "+ Silencers"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "probe" && (
+            <div className="inspector-content-row">
+              <span className="inspector-title">📍 Community Sensor</span>
+              <div className="inspector-actions">
+                <span className="inspector-hint">Drag anywhere across neighborhood to test decibels</span>
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* =========================================================================
+          5. CLEAN FLOATING BOTTOM ACTION DOCK (Figma / Mac Dock Style)
+          ========================================================================= */}
+      <div className="clean-floating-dock">
+        {/* Navigation Mode */}
+        <button
+          className={`dock-btn ${navMode === "orbit" ? "active" : ""}`}
+          onClick={() => setNavMode(navMode === "orbit" ? "pan" : "orbit")}
+          title="Toggle camera Orbit vs Pan"
+        >
+          <span className="dock-icon">{navMode === "orbit" ? "🔄" : "✋"}</span>
+          <span className="dock-label">{navMode === "orbit" ? "Orbit 3D" : "Pan 2D"}</span>
+        </button>
+
+        <div className="dock-divider"></div>
+
+        {/* Add Wall */}
+        <button className="dock-btn primary" onClick={handleAddWall} title="Add a new sound barrier wall">
+          <span className="dock-icon">🧱</span>
+          <span className="dock-label">+ Add Wall</span>
+        </button>
+
+        {/* Add Trees */}
+        <button className="dock-btn primary" onClick={handleAddTrees} title="Plant a bio-acoustic tree screen">
+          <span className="dock-icon">🌲</span>
+          <span className="dock-label">+ Plant Trees</span>
+        </button>
+
+        {/* Delete button (active only when something is selected) */}
+        {selectedItem && selectedItem.type !== "chiller" && selectedItem.type !== "probe" && (
+          <button className="dock-btn danger" onClick={handleDeleteSelected} title="Delete selected object (Delete key)">
+            <span className="dock-icon">🗑️</span>
+            <span className="dock-label">Delete</span>
+          </button>
+        )}
+
+        <div className="dock-divider"></div>
+
+        {/* Reset Layout */}
+        <button
+          className="dock-btn"
+          onClick={() => {
+            setLayoutItems([
+              { id: "chiller_compound", type: "chiller", x: 2, z: 0, placement: "side_exposed", silencers: false, rotation: 0 },
+              { id: "wall_1", type: "wall", x: 12, z: 0, height: 8, length: 28, rotation: 0, material: "absorptive_metal" },
+              { id: "tree_1", type: "tree_cluster", x: 24, z: 0, depth: 16, speciesId: site.recommendedTreeId || "virginia_pine" },
+              { id: "probe_1", type: "probe", x: 42, z: 0 },
+            ]);
+            setSelectedId(null);
+          }}
+          title="Reset elements to initial positions"
+        >
+          <span className="dock-icon">↺</span>
+          <span className="dock-label">Reset</span>
+        </button>
+
+        {/* Detailed Engineering Report Drawer */}
+        {onOpenReport && (
+          <button className="dock-btn highlight" onClick={onOpenReport} title="Open detailed engineering link budget">
+            <span className="dock-icon">📊</span>
+            <span className="dock-label">Pro Details</span>
+          </button>
+        )}
       </div>
     </div>
   );
