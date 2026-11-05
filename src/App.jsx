@@ -25,7 +25,7 @@ export default function App() {
 
   const [selectedServerId, setSelectedServerId] = useState(1);
   const [running, setRunning] = useState(true);
-  const [tab, setTab] = useState("landing"); // "landing" | "site" | "fleet" | "indoor"
+  const [tab, setTab] = useState("site"); // "site" | "fleet" | "indoor" | "landing"
   const [viewportMode, setViewportMode] = useState("twin"); // "twin" | "satellite" | "split"
   const [, refresh] = useState(0);
   const redraw = () => refresh((value) => value + 1);
@@ -140,14 +140,36 @@ export default function App() {
 
         {/* VIEW 1: SELECTED SITE 3D TWIN & ACOUSTIC SANDBOX */}
         {tab === "site" && (
-          <section className="site-tab-view">
+          <section className="site-tab-view animated-fadeIn">
+            {/* Quick Site Switcher Pills */}
+            <div className="site-quick-switcher-bar">
+              <span className="quick-bar-label">SELECT FACILITY:</span>
+              <div className="quick-pills-list">
+                {DATA_CENTER_SITES.map((site) => {
+                  const isCurrent = site.id === selectedSiteId;
+                  const flag = site.country === "Ireland" ? "🇮🇪" : "🇺🇸";
+                  return (
+                    <button
+                      key={site.id}
+                      className={`quick-pill-btn ${isCurrent ? "active" : ""}`}
+                      onClick={() => setSelectedSiteId(site.id)}
+                    >
+                      <span className="pill-flag">{flag}</span>
+                      <span className="pill-name">{site.name}</span>
+                      <span className="pill-terrain">{site.terrainLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Site Title Banner & Quick Metadata */}
             <div className="site-view-header">
               <div className="site-title-column">
                 <div className="site-eyebrow-row">
                   <span className="eyebrow">SPATIAL DIGITAL TWIN · 3D FACILITY GROUNDING</span>
                   <span
-                    className="site-status-pill"
+                    className="site-status-pill animate-pulse-badge"
                     style={{
                       background: `${acousticResults.statusColor}22`,
                       color: acousticResults.statusColor,
@@ -241,7 +263,7 @@ export default function App() {
 
         {/* VIEW 3: INDOOR COMPUTE RACKS & TELEMETRY */}
         {tab === "indoor" && (
-          <>
+          <section className="indoor-tab-view animated-fadeIn">
             <section className="metrics">
               <div>
                 <span>Indoor IT Power</span>
@@ -316,7 +338,7 @@ export default function App() {
                 running={running}
               />
             </Suspense>
-          </>
+          </section>
         )}
       </main>
 

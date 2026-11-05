@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { DATA_CENTER_SITES } from "../simulation/datacenterSites.js";
 
 export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
   const [activeStep, setActiveStep] = useState(1);
+  const [activeTabSolution, setActiveTabSolution] = useState("solution"); // "problem" | "solution"
 
   const steps = [
     {
@@ -10,12 +10,21 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
       tag: "STAGE 01",
       title: "Silicon Heat Generation & Compute Workload",
       icon: "⚡",
-      metric: "500 kW - 50 MW IT Load",
+      metric: "500 kW – 50 MW IT Load",
       summary:
-        "High-density server racks and AI compute clusters generate massive heat inside the data hall. Every watt of compute electricity is converted directly into thermal energy that must be extracted.",
+        "High-density server racks and AI compute clusters convert 100% of their electrical power directly into thermal energy that must be extracted from the data hall.",
       physicsDetail:
-        "ASHRAE TC 9.9 thermal standards require cold-aisle air at 18°C - 27°C. Chilled water loops (7°C supply / 12°C return) circulate through server rows and pump the heat load to the outdoor mechanical plant.",
-      formula: "Q_{thermal} = P_{IT} + P_{fans} \\approx 1.15 \\times P_{IT}",
+        "ASHRAE TC 9.9 thermal standards require cold-aisle air at 18°C – 27°C. Chilled water loops (7°C supply / 12°C return) circulate through server rows and pump the heat load to the outdoor mechanical cooling plant.",
+      formulaDisplay: (
+        <div className="math-display">
+          <span className="math-var">Q<sub>thermal</sub></span> ={" "}
+          <span className="math-var">P<sub>IT</sub></span> +{" "}
+          <span className="math-var">P<sub>fans</sub></span> ≈{" "}
+          <span className="math-num">1.15</span> ×{" "}
+          <span className="math-var">P<sub>IT</sub></span>
+        </div>
+      ),
+      formulaDesc: "Total facility thermal heat rejection directly scales with internal compute load.",
       badge: "Heat Source Core",
     },
     {
@@ -23,12 +32,21 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
       tag: "STAGE 02",
       title: "Cooling Plant Acoustic Emission",
       icon: "🌪️",
-      metric: "108 - 114 dBA Sound Power (Lw)",
+      metric: "108 – 114 dBA Sound Power (Lw)",
       summary:
         "Outdoor air-cooled chillers and condenser fans reject heat into the atmosphere. Twin-screw compressors emit low-frequency 60Hz/120Hz structural drones, while axial fans spin at 1200+ RPM emitting turbulent air roar.",
       physicsDetail:
-        "Sound power scales with compressor lift and the 5th power of fan tip speed (Lw ~ 50 log10(RPM)). In hot climates (115°F in Phoenix), chillers run at 100% duty, maximizing community sound emission.",
-      formula: "L_w = 108.0 + \\Delta T_{ambient} + 18\\log_{10}(RPM / RPM_{nom}) + 10\\log_{10}(P_{IT}/500)",
+        "Sound power scales with compressor lift and the 5th power of fan tip speed (Lw ~ 50 log₁₀(RPM)). In hot climates (115°F in Phoenix), chillers run at 100% duty, maximizing community sound emission.",
+      formulaDisplay: (
+        <div className="math-display">
+          <span className="math-var">L<sub>w</sub></span> ={" "}
+          <span className="math-num">108.0</span> +{" "}
+          <span className="math-var">ΔT<sub>ambient</sub></span> +{" "}
+          <span className="math-num">18</span> log<sub>10</sub>(RPM / RPM<sub>nom</sub>) +{" "}
+          <span className="math-num">10</span> log<sub>10</sub>(P<sub>IT</sub> / 500)
+        </div>
+      ),
+      formulaDesc: "Acoustic sound power generated as a function of ambient heat, fan speed, and IT load.",
       badge: "Acoustic Noise Origin",
     },
     {
@@ -40,8 +58,18 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
       summary:
         "Sound pressure spreads outward across the surrounding terrain. Geographic microclimates, canyon echo reflections (such as Columbia River Gorge basalt cliffs), and atmospheric absorption dictate attenuation.",
       physicsDetail:
-        "Hemispherical spreading reduces sound by -6 dB per doubling of distance (20 log10(d) + 11). However, low frequencies (60Hz hum) suffer far less air absorption, propagating over 600m into residential bedrooms.",
-      formula: "L_p(d) = L_w - 20\\log_{10}(d) - 11 + A_{terrain} - A_{atm}",
+        "Hemispherical spreading reduces sound by -6 dB per doubling of distance. However, low frequencies (60Hz hum) suffer far less air absorption, propagating over 600m into residential bedrooms.",
+      formulaDisplay: (
+        <div className="math-display">
+          <span className="math-var">L<sub>p</sub>(d)</span> ={" "}
+          <span className="math-var">L<sub>w</sub></span> −{" "}
+          <span className="math-num">20</span> log<sub>10</sub>(d) −{" "}
+          <span className="math-num">11</span> +{" "}
+          <span className="math-var">A<sub>terrain</sub></span> −{" "}
+          <span className="math-var">A<sub>atm</sub></span>
+        </div>
+      ),
+      formulaDesc: "Geometric hemispherical sound decay combined with atmospheric and ground absorption.",
       badge: "Physics Solver",
     },
     {
@@ -54,7 +82,16 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
         "HushGrid simulates 3 distinct engineering mitigation layers before breaking ground: Subterranean Chiller Vaulting (-28 dB), Maekawa Absorptive Barrier Walls (-18 dB), and Native Regional Bio-Buffers (-12 dB).",
       physicsDetail:
         "Maekawa diffraction calculates knife-edge insertion loss (N = 2δ/λ). NRC 0.95 absorptive metal prevents yard reflections, while regional evergreen needles scatter acoustic energy without irrigation.",
-      formula: "A_{barrier} = 10\\log_{10}(3 + 20N) + NRC_{bonus}, \\quad A_{veg} = 12(1 - e^{-\\alpha \\cdot d / 10})",
+      formulaDisplay: (
+        <div className="math-display">
+          <span className="math-var">A<sub>barrier</sub></span> ={" "}
+          <span className="math-num">10</span> log<sub>10</sub>(3 + 20N) + NRC<sub>bonus</sub>
+          <span className="math-sep"> · </span>
+          <span className="math-var">A<sub>veg</sub></span> ={" "}
+          <span className="math-num">12</span>(1 − e<sup>−α·d/10</sup>)
+        </div>
+      ),
+      formulaDesc: "Maekawa diffraction insertion loss and exponential foliage bio-scattering.",
       badge: "Active Countermeasures",
     },
     {
@@ -64,17 +101,25 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
       icon: "🏡",
       metric: "≤ 45 dBA Municipal Limit",
       summary:
-        "Calculates net received dBA and low-frequency dBC at the nearest residential property line (250m - 600m). Drives the Web Audio Ear Simulator and coordinates autonomous follow-the-moon nocturnal load shifting.",
+        "Calculates net received dBA and low-frequency dBC at the nearest residential property line (250m – 600m). Drives the Web Audio Ear Simulator and coordinates autonomous follow-the-moon nocturnal load shifting.",
       physicsDetail:
         "Ensures zero sleep disruption and full zoning compliance with Loudoun County and EU Environmental Noise Directives. If local night curfew approaches, workload automatically shifts across global time zones.",
-      formula: "Margin = L_{municipal\\_limit} - L_{net\\_received} \\ge 0 \\implies COMPLIANT",
+      formulaDisplay: (
+        <div className="math-display">
+          <span className="math-var">Margin</span> ={" "}
+          <span className="math-var">L<sub>municipal_limit</sub></span> −{" "}
+          <span className="math-var">L<sub>net_received</sub></span> ≥{" "}
+          <span className="math-num">0</span> dB ⇒ <span className="math-status">COMPLIANT</span>
+        </div>
+      ),
+      formulaDesc: "Binary compliance determination against local municipal ordinances.",
       badge: "Zoning & Compliance",
     },
   ];
 
   return (
-    <div className="landing-page">
-      {/* Hero Banner */}
+    <div className="landing-page animated-fadeIn">
+      {/* 1. Hero Banner */}
       <section className="landing-hero">
         <div className="hero-content">
           <div className="hero-eyebrow">
@@ -87,18 +132,18 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
           <p className="hero-subtext">
             Hyperscale cooling plants emit continuous <strong>95–114 dBA</strong> mechanical drones that violate suburban
             nighttime noise ordinances (<strong>≤ 40–45 dBA</strong>). HushGrid simulates architectural placements,
-            subterranean bunker vaults, high-NRC barrier walls, and native evergreen bio-buffers before and after construction.
+            subterranean bunker vaults, high-NRC barrier walls, and native evergreen bio-buffers in 3D.
           </p>
 
           <div className="hero-cta-group">
             <button className="primary-cta-btn" onClick={() => onNavigateToTwin("loudoun_va")}>
               <span className="btn-icon">🧊</span>
-              <span>Launch Selected Site 3D Twin</span>
+              <span>Open 3D Spatial Twin</span>
               <span className="btn-arrow">→</span>
             </button>
-            <a href="#how-it-works-map" className="secondary-cta-btn">
-              <span className="btn-icon">🗺️</span>
-              <span>Explore How It Works Map</span>
+            <a href="#pipeline-section" className="secondary-cta-btn">
+              <span className="btn-icon">📐</span>
+              <span>Inspect AeroAcoustic Pipeline</span>
             </a>
           </div>
 
@@ -120,24 +165,108 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
             <div className="stat-divider"></div>
             <div className="stat-item">
               <span className="stat-number">60Hz / 120Hz</span>
-              <span className="stat-label">Real-Time Web Audio Synthesizer</span>
+              <span className="stat-label">Synthesized Web Audio Engine</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* System Architecture Map: How It Works */}
-      <section id="how-it-works-map" className="how-it-works-section">
+      {/* 2. Problem vs Solution Interactive Comparison Card */}
+      <section className="problem-solution-section">
         <div className="section-title-wrap">
-          <span className="eyebrow-pill">INTERACTIVE ARCHITECTURE MAP</span>
-          <h2>How HushGrid Works: End-to-End Acoustic Pipeline</h2>
+          <span className="eyebrow-pill">INDUSTRY REALITY</span>
+          <h2>The Hyperscale Acoustic Dilemma</h2>
           <p>
-            Trace the complete acoustic link budget from silicon server chips inside the data hall to the neighbor’s
-            front porch. Click any stage to inspect the underlying physics formulas and real-world parameters.
+            Why standard cooling designs face severe community backlash, and how spatial digital twins solve it.
           </p>
         </div>
 
-        {/* The Visual Pipeline Roadmap */}
+        <div className="problem-solution-toggle-bar">
+          <button
+            className={`toggle-tab ${activeTabSolution === "problem" ? "active danger" : ""}`}
+            onClick={() => setActiveTabSolution("problem")}
+          >
+            ❌ Traditional Unmitigated Architecture
+          </button>
+          <button
+            className={`toggle-tab ${activeTabSolution === "solution" ? "active success" : ""}`}
+            onClick={() => setActiveTabSolution("solution")}
+          >
+            ✅ HushGrid Spatial Twin Mitigated
+          </button>
+        </div>
+
+        <div className="comparison-card-wrapper">
+          {activeTabSolution === "problem" ? (
+            <div className="comparison-content-card danger-card animated-fadeIn">
+              <div className="card-badge-row">
+                <span className="badge danger">62.4 dBA at Property Line · ⚠️ VIOLATION</span>
+                <span className="badge-sub">High Risk of Legal Injunctions</span>
+              </div>
+              <div className="comparison-grid">
+                <div className="comp-col">
+                  <h4>Mechanical Plant Layout</h4>
+                  <p>Rooftop or side-exposed V-bank chillers with zero structural shielding.</p>
+                  <ul>
+                    <li>1200+ RPM axial fans radiating directly toward suburban homes</li>
+                    <li>Twin-screw 60Hz and 120Hz compressors vibrate into structural columns</li>
+                    <li>Direct line-of-sight sound propagation across flat topography</li>
+                  </ul>
+                </div>
+                <div className="comp-col">
+                  <h4>Community & Financial Fallout</h4>
+                  <p>In Loudoun County and Dublin, residents have formed coalitions filing noise injunctions.</p>
+                  <ul>
+                    <li>Night noise levels exceed 45 dBA by up to 17 dBA</li>
+                    <li>Costly emergency retrofits ($3M+ per facility after commissioning)</li>
+                    <li>Permit cancellations and delayed commercial operation dates</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="comparison-content-card success-card animated-fadeIn">
+              <div className="card-badge-row">
+                <span className="badge success">38.2 dBA at Property Line · ✓ COMPLIANT</span>
+                <span className="badge-sub">Fully Permitted & Community Aligned</span>
+              </div>
+              <div className="comparison-grid">
+                <div className="comp-col">
+                  <h4>Engineered Mitigation Layers</h4>
+                  <p>Subterranean vaulting, Maekawa barrier walls, and regional evergreen bio-buffers.</p>
+                  <ul>
+                    <li>Subterranean excavation (-28 dB) eliminates line-of-sight radiation</li>
+                    <li>NRC 0.95 absorptive barrier walls prevent reverberant sound buildup</li>
+                    <li>Native pine bio-acoustic screens scatter high-frequency fan turbulence</li>
+                  </ul>
+                </div>
+                <div className="comp-col">
+                  <h4>Autonomous Operations & Zero Sleep Disruption</h4>
+                  <p>Autonomous coordination with zero impact on resident sleep cycles.</p>
+                  <ul>
+                    <li>Sleep sanctuary noise level (&lt; 40 dBA inside bedrooms)</li>
+                    <li>Follow-the-Moon automated night curfew compute load shifting</li>
+                    <li>Verified against real Google Maps satellite geometry before ground-breaking</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 3. Interactive Architecture Pipeline Map */}
+      <section id="pipeline-section" className="how-it-works-section">
+        <div className="section-title-wrap">
+          <span className="eyebrow-pill">END-TO-END ACOUSTIC SOLVER</span>
+          <h2>The 5-Stage Physics Pipeline</h2>
+          <p>
+            Trace acoustic energy from silicon chips inside server racks all the way to the neighbor’s front porch.
+            Click any stage to inspect its governing mathematical model.
+          </p>
+        </div>
+
+        {/* Visual Pipeline Flow */}
         <div className="pipeline-map-flow">
           {steps.map((step, idx) => (
             <div
@@ -164,12 +293,12 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
           ))}
         </div>
 
-        {/* Selected Stage Detail Drawer */}
+        {/* Selected Stage Detail Inspector */}
         <div className="active-stage-inspector">
           {(() => {
             const current = steps.find((s) => s.id === activeStep) || steps[0];
             return (
-              <div className="stage-detail-grid">
+              <div className="stage-detail-grid animated-fadeIn">
                 <div className="stage-detail-left">
                   <div className="stage-header-row">
                     <span className="stage-large-icon">{current.icon}</span>
@@ -184,10 +313,12 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
                     <strong>Engineering Physics:</strong> {current.physicsDetail}
                   </p>
                 </div>
+
                 <div className="stage-detail-right">
                   <div className="formula-box">
                     <span className="formula-header">GOVERNING MATHEMATICAL MODEL</span>
-                    <code className="formula-code">{current.formula}</code>
+                    <div className="formula-render">{current.formulaDisplay}</div>
+                    <small className="formula-caption">{current.formulaDesc}</small>
                   </div>
                   <div className="stage-actions">
                     <button
@@ -205,133 +336,20 @@ export default function LandingPage({ onSelectSite, onNavigateToTwin }) {
         </div>
       </section>
 
-      {/* Feature Showcase Grid */}
-      <section className="features-showcase-section">
-        <div className="section-title-wrap">
-          <span className="eyebrow-pill">ENGINEERING INNOVATIONS</span>
-          <h2>Core Prototype Features & Spatial Capabilities</h2>
-          <p>
-            Experience rigorous spatial interaction, decibel transparency, and architectural 3D visualization.
-          </p>
-        </div>
-
-        <div className="features-grid">
-          {/* Feature 1 */}
-          <div className="feature-card">
-            <div className="feature-icon-wrapper">🧊</div>
-            <h3>3D Site Twin Matching Satellite Imagery</h3>
+      {/* 4. Streamlined Call to Action Banner */}
+      <section className="landing-bottom-cta">
+        <div className="cta-inner-card">
+          <div className="cta-text">
+            <h2>Ready to Explore the 3D AeroAcoustic Digital Twin?</h2>
             <p>
-              Accurate 3D geometry grounded in verified Google Maps coordinates. Inspect realistic tilt-up concrete
-              walls, 400-ton V-bank chillers, and residential property boundaries across Loudoun County, Phoenix,
-              Columbia Gorge, and Dublin.
+              Inspect real-world satellite groundings, drag sound probes, adjust barrier walls, and listen to synthesized decibels.
             </p>
-            <div className="feature-pill">Real-World Coordinates Grounded</div>
           </div>
-
-          {/* Feature 2 */}
-          <div className="feature-card highlighted-feature">
-            <div className="feature-icon-wrapper">🎯</div>
-            <h3>Concentric Noise Circles (dBA Isophones)</h3>
-            <p>
-              Dynamic concentric contour rings (75, 65, 55, 45, 40 dBA) painted on the terrain radiating outward
-              from the chiller plant. Applying barrier walls or subterranean vaults physically contracts the rings
-              in real time.
-            </p>
-            <div className="feature-pill highlight-pill">Real-Time ISO 9613-2 Physics</div>
+          <div className="cta-buttons">
+            <button className="primary-cta-btn" onClick={() => onNavigateToTwin("loudoun_va")}>
+              🧊 Launch 3D Twin Sandbox
+            </button>
           </div>
-
-          {/* Feature 3 */}
-          <div className="feature-card highlighted-feature">
-            <div className="feature-icon-wrapper">📍</div>
-            <h3>Interactive Noise Pointer & Spatial Probe</h3>
-            <p>
-              Click or drag the holographic sound probe anywhere on the 3D ground. Immediately read out the exact
-              distance from the cooling plant and the calculated sound pressure level (dBA and low-frequency dBC).
-            </p>
-            <div className="feature-pill highlight-pill">Freeform Terrain Sampling</div>
-          </div>
-
-          {/* Feature 4 */}
-          <div className="feature-card">
-            <div className="feature-icon-wrapper">📐</div>
-            <h3>Exploded Subsystem View (CAD Disassembly)</h3>
-            <p>
-              Engage the subassembly disassembly slider to lift the facility roof, separate exterior structural walls,
-              and explode V-bank chiller mechanical components to inspect internal compute rows and cooling loops.
-            </p>
-            <div className="feature-pill">Subsystem Disassembly</div>
-          </div>
-
-          {/* Feature 5 */}
-          <div className="feature-card">
-            <div className="feature-icon-wrapper">🏗️</div>
-            <h3>3D Drag-and-Drop Object Placement</h3>
-            <p>
-              Freely move chillers, position modular acoustic barrier walls, adjust wall heights from 2m to 16m, and
-              plant species-specific evergreen tree screens to observe instant acoustic attenuation in 3D.
-            </p>
-            <div className="feature-pill">Interactive Spatial Layout</div>
-          </div>
-
-          {/* Feature 6 */}
-          <div className="feature-card">
-            <div className="feature-icon-wrapper">🎧</div>
-            <h3>Live Web Audio Ear Simulator</h3>
-            <p>
-              Listen to the actual noise level at the residential property line. Synthesizes 60Hz/120Hz twin-screw
-              compressor hum and turbulent airflow roar with volume calibrated to the calculated decibels.
-            </p>
-            <div className="feature-pill">Harmonic Web Audio Engine</div>
-          </div>
-        </div>
-      </section>
-
-      {/* Geographic Sites Quick Launch */}
-      <section className="sites-gallery-section">
-        <div className="section-title-wrap">
-          <span className="eyebrow-pill">GLOBAL DATA CENTER FLEET</span>
-          <h2>Select a Real-World Facility to Simulate</h2>
-          <p>
-            Each location presents unique microclimates, ambient temperature penalties, terrain echoes, and strict
-            zoning noise limits.
-          </p>
-        </div>
-
-        <div className="sites-gallery-grid">
-          {DATA_CENTER_SITES.map((site) => (
-            <div key={site.id} className="site-gallery-card">
-              <div className="site-card-header">
-                <span className="site-country-tag">{site.country}</span>
-                <span className="site-terrain-tag">{site.terrainLabel}</span>
-              </div>
-              <h3 className="site-card-title">{site.name}</h3>
-              <p className="site-card-facility">{site.realFacilityName || "Hyperscale Facility"}</p>
-              <p className="site-card-desc">{site.description}</p>
-              <div className="site-card-meta">
-                <div className="meta-row">
-                  <span>Distance to Homes:</span>
-                  <strong>{site.defaultDistanceToHomesMeters}m</strong>
-                </div>
-                <div className="meta-row">
-                  <span>Nighttime Limit:</span>
-                  <strong>{site.municipalNoiseLimitDba} dBA</strong>
-                </div>
-                <div className="meta-row">
-                  <span>Ambient Outdoor Temp:</span>
-                  <strong>{site.ambientTempC}°C</strong>
-                </div>
-              </div>
-              <button
-                className="site-launch-btn"
-                onClick={() => {
-                  onSelectSite(site.id);
-                  onNavigateToTwin(site.id);
-                }}
-              >
-                Launch 3D Twin for {site.name} →
-              </button>
-            </div>
-          ))}
         </div>
       </section>
     </div>

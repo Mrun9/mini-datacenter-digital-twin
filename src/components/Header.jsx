@@ -65,21 +65,14 @@ export default function Header({
       {/* Center Navigation Tabs */}
       <nav className="header-nav" aria-label="Main Navigation">
         <button
-          className={`nav-tab-btn ${activeTab === "landing" ? "active" : ""}`}
-          onClick={() => onSelectTab("landing")}
-        >
-          <span className="tab-icon">🗺️</span>
-          <span>How It Works</span>
-        </button>
-        <button
           className={`nav-tab-btn ${activeTab === "site" ? "active" : ""}`}
           onClick={() => onSelectTab("site")}
         >
           <span className="tab-icon">🧊</span>
-          <span>Selected Site 3D Twin</span>
+          <span>3D Digital Twin</span>
           {acousticResults && (
             <span
-              className="tab-pill"
+              className="tab-pill animate-pulse-badge"
               style={{
                 background: `${acousticResults.statusColor}22`,
                 color: acousticResults.statusColor,
@@ -102,7 +95,14 @@ export default function Header({
           onClick={() => onSelectTab("indoor")}
         >
           <span className="tab-icon">🖥️</span>
-          <span>Server Racks</span>
+          <span>Indoor Telemetry</span>
+        </button>
+        <button
+          className={`nav-tab-btn ${activeTab === "landing" ? "active" : ""}`}
+          onClick={() => onSelectTab("landing")}
+        >
+          <span className="tab-icon">📖</span>
+          <span>How It Works</span>
         </button>
       </nav>
 
@@ -160,14 +160,17 @@ export default function Header({
         {/* Live Simulation Clock & Pause/Play */}
         <div className="header-clock-strip">
           <button
-            className="sim-toggle-btn"
+            className={`sim-toggle-btn ${running ? "running" : "paused"}`}
             onClick={onToggleRunning}
             title={running ? "Pause Simulation" : "Resume Simulation"}
           >
             {running ? "⏸" : "▶"}
           </button>
           <div className="clock-details">
-            <span className="clock-label">{running ? "LIVE SIM" : "PAUSED"}</span>
+            <span className="clock-label">
+              <span className={`live-status-dot ${running ? "pulse" : "idle"}`}></span>
+              {running ? "LIVE SIM" : "PAUSED"}
+            </span>
             <span className="clock-time">{simulationTimeSeconds.toFixed(1)}s</span>
           </div>
         </div>
