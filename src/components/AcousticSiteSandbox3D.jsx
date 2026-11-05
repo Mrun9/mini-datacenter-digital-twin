@@ -7,6 +7,7 @@ import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 
 /**
  * Camera Navigation with Smooth Orbit and Pan
+ * Expansive framing so the entire 300m radius (North, South, East Highway, West Neighborhood) is in full view
  */
 function SiteCameraControls({ navMode, cameraPreset, isDragging }) {
   const { camera, gl } = useThree();
@@ -14,9 +15,9 @@ function SiteCameraControls({ navMode, cameraPreset, isDragging }) {
 
   useEffect(() => {
     const controls = new OrbitControls(camera, gl.domElement);
-    controls.target.set(0, 3, 0);
-    controls.minDistance = 10;
-    controls.maxDistance = 300;
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 15;
+    controls.maxDistance = 320;
     controls.maxPolarAngle = Math.PI / 2 - 0.04;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -47,20 +48,24 @@ function SiteCameraControls({ navMode, cameraPreset, isDragging }) {
     }
   }, [navMode]);
 
+  // Camera presets
   useEffect(() => {
     if (!orbitRef.current) return;
     if (cameraPreset === "reset") {
-      camera.position.set(-20, 52, 68);
-      orbitRef.current.target.set(0, 2, 0);
-    } else if (cameraPreset === "top") {
-      camera.position.set(0, 125, 0.01);
+      camera.position.set(0, 115, 125);
       orbitRef.current.target.set(0, 0, 0);
-    } else if (cameraPreset === "plant") {
-      camera.position.set(6, 22, 28);
-      orbitRef.current.target.set(6, 3, 0);
+    } else if (cameraPreset === "top") {
+      camera.position.set(0, 160, 0.01);
+      orbitRef.current.target.set(0, 0, 0);
+    } else if (cameraPreset === "highway") {
+      camera.position.set(40, 42, 60);
+      orbitRef.current.target.set(38, 0, 0);
     } else if (cameraPreset === "homes") {
-      camera.position.set(-36, 24, 28);
-      orbitRef.current.target.set(-36, 3, 0);
+      camera.position.set(-36, 32, 45);
+      orbitRef.current.target.set(-36, 0, 0);
+    } else if (cameraPreset === "plant") {
+      camera.position.set(4, 28, 38);
+      orbitRef.current.target.set(4, 0, 0);
     }
     orbitRef.current.update();
   }, [cameraPreset, camera]);
@@ -69,13 +74,13 @@ function SiteCameraControls({ navMode, cameraPreset, isDragging }) {
 }
 
 /**
- * Authentic 360-Degree Ground Terrain (No wireframe grid, rich real-world textures)
- * Faithfully reproduces the satellite imagery within 300m radius:
- * - Campus asphalt access roads & parking aprons
- * - Curving residential streets and cul-de-sacs to the West
- * - Winding riparian creek/stream to the North
- * - Multi-lane arterial highway corridor to the East
- * - Retention basin pond with realistic water
+ * Authentic 360-Degree Ground Terrain & Surroundings
+ * Fully simulates everything in the 300-meter / 1,000-foot radius matching satellite map:
+ * - EAST: Route 28 Multi-Lane Highway with traffic, median barrier, overpass, and curved on-ramp
+ * - WEST: Curving suburban residential avenue, cul-de-sac, and 20+ two-story homes
+ * - NORTH: Curved Waxpool perimeter road, riparian stream, and pine buffer
+ * - SOUTH: Electrical transformer substation and southern campus access road
+ * - Red dashed 300m boundary ring matching satellite map
  */
 function RealisticCampusTerrain({ site, timeOfDay, onGroundPointerMove, onGroundPointerUp, onDeselect }) {
   const isNight = timeOfDay === "night";
@@ -83,12 +88,12 @@ function RealisticCampusTerrain({ site, timeOfDay, onGroundPointerMove, onGround
   const terrainColor = useMemo(() => {
     if (site.terrainType === "desert_plain") return isNight ? "#3b2c1c" : "#7c5836";
     if (site.terrainType === "mountain_canyon") return isNight ? "#1f2924" : "#3d4f47";
-    return isNight ? "#122419" : "#244c2c"; // Natural green grass/turf
+    return isNight ? "#122419" : "#244c2c";
   }, [site.terrainType, isNight]);
 
   return (
     <group position={[0, -0.05, 0]}>
-      {/* 1. Main Base Terrain (Real Earth / Green Turf) */}
+      {/* 1. Main Base Terrain Plane */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         receiveShadow
@@ -104,83 +109,192 @@ function RealisticCampusTerrain({ site, timeOfDay, onGroundPointerMove, onGround
         <meshStandardMaterial color={terrainColor} roughness={0.92} />
       </mesh>
 
-      {/* 2. Data Center Campus Concrete Pad & Circulation Roads */}
-      <group position={[8, 0.02, 0]}>
-        {/* Main Concrete Industrial Equipment Apron */}
+      {/* 2. Red Dashed 300m Boundary Ring (Exact 1:1 match with satellite map circle) */}
+      <group position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh>
+          <ringGeometry args={[37.5, 38.2, 64]} />
+          <meshBasicMaterial color="#ef4444" transparent opacity={0.65} side={DoubleSide} />
+        </mesh>
+      </group>
+
+      {/* 3. Data Center Central Campus Pad & Paved Access Roads */}
+      <group position={[2, 0.02, 0]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[56, 84]} />
+          <planeGeometry args={[52, 72]} />
           <meshStandardMaterial color="#2b3544" roughness={0.7} />
         </mesh>
-        {/* Perimeter Asphalt Service Road Loop */}
+        {/* Perimeter Asphalt Service Loop */}
         <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[66, 94]} />
-          <meshStandardMaterial color="#17202c" roughness={0.8} />
+          <planeGeometry args={[60, 80]} />
+          <meshStandardMaterial color="#161f2c" roughness={0.8} />
         </mesh>
-        {/* Employee & Visitor Parking Bays */}
-        <mesh position={[0, 0.02, 38]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[32, 10]} />
+        {/* Parking Bays */}
+        <mesh position={[0, 0.02, 34]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[28, 9]} />
           <meshStandardMaterial color="#1e293b" roughness={0.8} />
         </mesh>
-        {/* White Parking Stall Markings */}
-        {[-14, -10, -6, -2, 2, 6, 10, 14].map((px) => (
-          <mesh key={px} position={[px, 0.025, 38]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[0.22, 8.5]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.75} />
+        {[-12, -8, -4, 0, 4, 8, 12].map((px) => (
+          <mesh key={px} position={[px, 0.025, 34]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.22, 7.5]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
           </mesh>
         ))}
       </group>
 
-      {/* 3. Stormwater Retention Detention Basin (Southeast Corner of Parcel) */}
-      <group position={[32, 0, 34]}>
-        <mesh position={[0, -0.4, 0]}>
-          <boxGeometry args={[22, 0.8, 24]} />
-          <meshStandardMaterial color="#142b1a" roughness={0.95} />
-        </mesh>
-        {/* Reflective Water Pool */}
-        <mesh position={[0, -0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[20, 22]} />
-          <meshStandardMaterial
-            color="#0284c7"
-            roughness={0.15}
-            metalness={0.75}
-            transparent
-            opacity={0.85}
-          />
-        </mesh>
-      </group>
-
-      {/* 4. North/Northwest Meandering Creek / Stream Bed */}
-      <group position={[-10, 0.015, -48]}>
-        {/* Winding Blue/Green Stream Water */}
-        <mesh rotation={[-Math.PI / 2, 0, 0.15]}>
-          <planeGeometry args={[140, 8]} />
-          <meshStandardMaterial color="#0369a1" roughness={0.2} metalness={0.6} transparent opacity={0.8} />
-        </mesh>
-        {/* Riparian Gravel Bank */}
-        <mesh position={[0, -0.005, 0]} rotation={[-Math.PI / 2, 0, 0.15]}>
-          <planeGeometry args={[144, 14]} />
-          <meshStandardMaterial color="#374151" roughness={0.95} />
-        </mesh>
-      </group>
-
-      {/* 5. East Arterial Highway Corridor (Route 28 / Pacific Blvd) */}
-      <group position={[52, 0.03, 0]}>
-        {/* 4-Lane Paved Highway */}
+      {/* 4. EAST: ROUTE 28 MULTI-LANE HIGHWAY CORRIDOR (Inside 300m Radius at x = 38) */}
+      <group position={[38, 0.03, 0]}>
+        {/* 4-Lane Divided Highway Pavement */}
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[16, 260]} />
+          <planeGeometry args={[16, 240]} />
           <meshStandardMaterial color="#141a24" roughness={0.8} />
         </mesh>
-        {/* Concrete Median Safety Barrier */}
+        {/* Concrete Center Jersey Safety Barrier */}
         <mesh position={[0, 0.5, 0]}>
-          <boxGeometry args={[0.7, 1.0, 260]} />
+          <boxGeometry args={[0.7, 1.0, 240]} />
           <meshStandardMaterial color="#94a3b8" />
         </mesh>
-        {/* Yellow & White Lane Markings */}
+        {/* White Dashed Lane Lines and Yellow Solid Edge Lines */}
         {[-4, 4].map((hx) => (
           <mesh key={hx} position={[hx, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[0.25, 250]} />
-            <meshBasicMaterial color="#fef08a" transparent opacity={0.6} />
+            <planeGeometry args={[0.25, 230]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
           </mesh>
+        ))}
+        {[-7.5, 7.5].map((hx) => (
+          <mesh key={hx} position={[hx, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.3, 230]} />
+            <meshBasicMaterial color="#fef08a" transparent opacity={0.75} />
+          </mesh>
+        ))}
+
+        {/* Sweeping Curved On/Off Ramp from Northeast */}
+        <group position={[-10, 0.01, -30]} rotation={[0, -Math.PI / 6, 0]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[8, 60]} />
+            <meshStandardMaterial color="#161f2c" roughness={0.8} />
+          </mesh>
+        </group>
+
+        {/* Green Overhead Highway Directional Sign Gantry */}
+        <group position={[0, 0, -15]}>
+          <mesh position={[-7.5, 3.5, 0]}>
+            <cylinderGeometry args={[0.15, 0.15, 7, 8]} />
+            <meshStandardMaterial color="#64748b" metalness={0.8} />
+          </mesh>
+          <mesh position={[7.5, 3.5, 0]}>
+            <cylinderGeometry args={[0.15, 0.15, 7, 8]} />
+            <meshStandardMaterial color="#64748b" metalness={0.8} />
+          </mesh>
+          <mesh position={[0, 7.0, 0]}>
+            <boxGeometry args={[16, 0.4, 0.4]} />
+            <meshStandardMaterial color="#64748b" />
+          </mesh>
+          {/* Green Highway Signboards */}
+          <mesh position={[-3.5, 5.8, 0.2]}>
+            <boxGeometry args={[5.5, 2.0, 0.1]} />
+            <meshStandardMaterial color="#065f46" roughness={0.3} />
+          </mesh>
+          <mesh position={[3.5, 5.8, 0.2]}>
+            <boxGeometry args={[5.5, 2.0, 0.1]} />
+            <meshStandardMaterial color="#065f46" roughness={0.3} />
+          </mesh>
+        </group>
+
+        {/* Moving/Parked Cars and Semi-Trucks on Highway */}
+        {[
+          { x: -4, z: -45, color: "#dc2626", type: "sedan" },
+          { x: -4, z: -10, color: "#0284c7", type: "truck" },
+          { x: -4, z: 25, color: "#ffffff", type: "suv" },
+          { x: 4, z: -30, color: "#10b981", type: "sedan" },
+          { x: 4, z: 8, color: "#eab308", type: "truck" },
+          { x: 4, z: 40, color: "#475569", type: "sedan" },
+        ].map((car, idx) => (
+          <group key={idx} position={[car.x, 0.65, car.z]}>
+            <mesh>
+              <boxGeometry args={[car.type === "truck" ? 2.6 : 2.0, car.type === "truck" ? 2.2 : 1.1, car.type === "truck" ? 8.0 : 3.4]} />
+              <meshStandardMaterial color={car.color} metalness={0.6} roughness={0.3} />
+            </mesh>
+          </group>
+        ))}
+
+        {/* High-Mast Highway Light Poles */}
+        {[-60, -20, 20, 60].map((lz) => (
+          <group key={lz} position={[0, 0, lz]}>
+            <mesh position={[0, 6, 0]}>
+              <cylinderGeometry args={[0.08, 0.12, 12, 8]} />
+              <meshStandardMaterial color="#64748b" metalness={0.9} />
+            </mesh>
+            <mesh position={[0, 12, 0]}>
+              <boxGeometry args={[2.5, 0.2, 0.4]} />
+              <meshStandardMaterial color="#94a3b8" />
+            </mesh>
+            {isNight && (
+              <pointLight position={[0, 12, 0]} intensity={8} distance={28} color="#fef08a" />
+            )}
+          </group>
+        ))}
+      </group>
+
+      {/* 5. NORTH: CURVED WAXPOOL ROAD & RIPARIAN CREEK BUFFER */}
+      <group position={[0, 0.02, -45]}>
+        {/* Curved East-West Northern Perimeter Parkway */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[140, 10]} />
+          <meshStandardMaterial color="#161f2c" roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[130, 0.25]} />
+          <meshBasicMaterial color="#fef08a" transparent opacity={0.6} />
+        </mesh>
+
+        {/* Meandering Blue Stream Creek */}
+        <mesh position={[-15, -0.005, -10]} rotation={[-Math.PI / 2, 0, 0.1]}>
+          <planeGeometry args={[120, 7]} />
+          <meshStandardMaterial color="#0369a1" roughness={0.2} metalness={0.6} transparent opacity={0.8} />
+        </mesh>
+      </group>
+
+      {/* 6. SOUTHEAST: STORMWATER RETENTION DETENTION POND */}
+      <group position={[24, 0, 32]}>
+        <mesh position={[0, -0.4, 0]}>
+          <boxGeometry args={[18, 0.8, 20]} />
+          <meshStandardMaterial color="#142b1a" roughness={0.95} />
+        </mesh>
+        <mesh position={[0, -0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[16, 18]} />
+          <meshStandardMaterial color="#0284c7" roughness={0.15} metalness={0.75} transparent opacity={0.85} />
+        </mesh>
+      </group>
+
+      {/* 7. SOUTH: HIGH-VOLTAGE SUBSTATION YARD (Transformer Banks & Lattice Towers) */}
+      <group position={[14, 0.02, 48]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[30, 22]} />
+          <meshStandardMaterial color="#475569" roughness={0.95} />
+        </mesh>
+        {/* Steel Lattice Transmission Tower */}
+        <group position={[-10, 0, 0]}>
+          <mesh position={[0, 7, 0]}>
+            <cylinderGeometry args={[0.3, 1.6, 14, 4]} />
+            <meshStandardMaterial color="#94a3b8" wireframe />
+          </mesh>
+          <mesh position={[0, 12, 0]}>
+            <boxGeometry args={[5, 0.3, 0.3]} />
+            <meshStandardMaterial color="#94a3b8" />
+          </mesh>
+        </group>
+        {/* 3 Step-Down Transformers */}
+        {[-4, 4, 10].map((tx) => (
+          <group key={tx} position={[tx, 0, 0]}>
+            <mesh position={[0, 2.0, 0]}>
+              <boxGeometry args={[4.2, 4.0, 4.2]} />
+              <meshStandardMaterial color="#334155" metalness={0.8} />
+            </mesh>
+            <mesh position={[0, 4.8, 0]}>
+              <cylinderGeometry args={[0.15, 0.22, 1.6, 8]} />
+              <meshStandardMaterial color="#b45309" />
+            </mesh>
+          </group>
         ))}
       </group>
     </group>
@@ -188,46 +302,38 @@ function RealisticCampusTerrain({ site, timeOfDay, onGroundPointerMove, onGround
 }
 
 /**
- * 3 Hyperscale Data Center Compute Buildings (Matching the 3 Angled Buildings on Satellite Map)
- * - Building 1 (North Compute Hall): Long angled rectangular building (36m x 15m)
- * - Building 2 (Central Compute Hall): Parallel building with white TPO roof and CRAH units
- * - Building 3 (South Compute Hall): Parallel building with loading dock bays & trailers
+ * 3 Angled Hyperscale Compute Buildings (Footprint Matching Satellite Map)
  */
 function HyperscaleTripleCampus() {
   const buildingHeight = 7.5;
-  const angleRad = (22 * Math.PI) / 180; // 22-degree diagonal orientation matching satellite
+  const angleRad = (22 * Math.PI) / 180;
 
   return (
-    <group position={[8, 0, -2]} rotation={[0, -angleRad, 0]}>
-      {/* -------------------------------------------------------------------------
-          BUILDING 1: NORTH COMPUTE HALL
-          ------------------------------------------------------------------------- */}
-      <group position={[0, 0, -22]}>
-        {/* Precast Concrete Insulated Structure */}
+    <group position={[2, 0, -2]} rotation={[0, -angleRad, 0]}>
+      {/* BUILDING 1: NORTH COMPUTE HALL */}
+      <group position={[0, 0, -20]}>
         <mesh position={[0, buildingHeight / 2, 0]}>
-          <boxGeometry args={[34, buildingHeight, 14]} />
+          <boxGeometry args={[32, buildingHeight, 13]} />
           <meshStandardMaterial color="#e2e8f0" roughness={0.65} metalness={0.1} />
         </mesh>
-        {/* Architectural Charcoal Reveal Band */}
         <mesh position={[0, buildingHeight * 0.75, 0]}>
-          <boxGeometry args={[34.2, 0.8, 14.2]} />
+          <boxGeometry args={[32.2, 0.8, 13.2]} />
           <meshStandardMaterial color="#1e293b" roughness={0.5} />
         </mesh>
-        {/* White Reflective TPO Membrane Roof */}
         <mesh position={[0, buildingHeight + 0.15, 0]}>
-          <boxGeometry args={[34.4, 0.3, 14.4]} />
-          <meshStandardMaterial color="#f8fafc" roughness={0.25} metalness={0.05} />
+          <boxGeometry args={[32.4, 0.3, 13.4]} />
+          <meshStandardMaterial color="#f8fafc" roughness={0.25} />
         </mesh>
-        {/* 6 Rooftop Air Handling Units (CRAHs) */}
-        {[-10, 0, 10].map((rx) =>
+        {/* Rooftop CRAH HVAC Units */}
+        {[-9, 0, 9].map((rx) =>
           [-3, 3].map((rz) => (
             <group key={`${rx}_${rz}`} position={[rx, buildingHeight + 0.3, rz]}>
               <mesh position={[0, 0.8, 0]}>
-                <boxGeometry args={[3.6, 1.6, 2.6]} />
+                <boxGeometry args={[3.4, 1.6, 2.4]} />
                 <meshStandardMaterial color="#475569" metalness={0.7} />
               </mesh>
               <mesh position={[0, 1.8, 0]}>
-                <cylinderGeometry args={[0.7, 0.7, 0.5, 12]} />
+                <cylinderGeometry args={[0.65, 0.65, 0.5, 12]} />
                 <meshStandardMaterial color="#cbd5e1" metalness={0.9} />
               </mesh>
             </group>
@@ -235,73 +341,65 @@ function HyperscaleTripleCampus() {
         )}
       </group>
 
-      {/* -------------------------------------------------------------------------
-          BUILDING 2: CENTRAL COMPUTE HALL
-          ------------------------------------------------------------------------- */}
+      {/* BUILDING 2: CENTRAL COMPUTE HALL */}
       <group position={[0, 0, 0]}>
         <mesh position={[0, buildingHeight / 2, 0]}>
-          <boxGeometry args={[34, buildingHeight, 14]} />
+          <boxGeometry args={[32, buildingHeight, 13]} />
           <meshStandardMaterial color="#e2e8f0" roughness={0.65} metalness={0.1} />
         </mesh>
         <mesh position={[0, buildingHeight * 0.75, 0]}>
-          <boxGeometry args={[34.2, 0.8, 14.2]} />
+          <boxGeometry args={[32.2, 0.8, 13.2]} />
           <meshStandardMaterial color="#1e293b" roughness={0.5} />
         </mesh>
         <mesh position={[0, buildingHeight + 0.15, 0]}>
-          <boxGeometry args={[34.4, 0.3, 14.4]} />
+          <boxGeometry args={[32.4, 0.3, 13.4]} />
           <meshStandardMaterial color="#f8fafc" roughness={0.25} />
         </mesh>
-        {/* Rooftop HVAC Penthouse Screen */}
         <mesh position={[0, buildingHeight + 1.2, 0]}>
-          <boxGeometry args={[26, 1.8, 0.2]} />
+          <boxGeometry args={[24, 1.8, 0.2]} />
           <meshStandardMaterial color="#334155" metalness={0.8} />
         </mesh>
       </group>
 
-      {/* -------------------------------------------------------------------------
-          BUILDING 3: SOUTH COMPUTE HALL & CORPORATE FRONT
-          ------------------------------------------------------------------------- */}
-      <group position={[0, 0, 22]}>
+      {/* BUILDING 3: SOUTH COMPUTE HALL & CORPORATE FRONT */}
+      <group position={[0, 0, 20]}>
         <mesh position={[0, buildingHeight / 2, 0]}>
-          <boxGeometry args={[34, buildingHeight, 14]} />
+          <boxGeometry args={[32, buildingHeight, 13]} />
           <meshStandardMaterial color="#e2e8f0" roughness={0.65} metalness={0.1} />
         </mesh>
         <mesh position={[0, buildingHeight * 0.75, 0]}>
-          <boxGeometry args={[34.2, 0.8, 14.2]} />
+          <boxGeometry args={[32.2, 0.8, 13.2]} />
           <meshStandardMaterial color="#1e293b" roughness={0.5} />
         </mesh>
         <mesh position={[0, buildingHeight + 0.15, 0]}>
-          <boxGeometry args={[34.4, 0.3, 14.4]} />
+          <boxGeometry args={[32.4, 0.3, 13.4]} />
           <meshStandardMaterial color="#f8fafc" roughness={0.25} />
         </mesh>
-
-        {/* Corporate Blue Glass Curtain Entrance */}
-        <mesh position={[0, 3.2, 7.2]}>
-          <boxGeometry args={[14, 4.6, 0.3]} />
+        {/* Blue Glass Corporate Entrance */}
+        <mesh position={[0, 3.2, 6.7]}>
+          <boxGeometry args={[13, 4.6, 0.3]} />
           <meshStandardMaterial color="#0284c7" metalness={0.9} transparent opacity={0.75} />
         </mesh>
-        {/* Modern Steel Entrance Canopy */}
-        <mesh position={[0, 4.4, 8.8]}>
-          <boxGeometry args={[16, 0.35, 3.2]} />
+        {/* Modern Cantilevered Entrance Canopy */}
+        <mesh position={[0, 4.4, 8.2]}>
+          <boxGeometry args={[15, 0.35, 3.0]} />
           <meshStandardMaterial color="#0f172a" metalness={0.8} />
         </mesh>
-
-        {/* Industrial Loading Dock Bays on Rear */}
-        {[-8, -2.5, 3, 8.5].map((dockX, idx) => (
-          <group key={dockX} position={[dockX, 2.0, -7.2]}>
+        {/* Loading Docks with Parked Semi-Trailers */}
+        {[-7, 0, 7].map((dockX, idx) => (
+          <group key={dockX} position={[dockX, 2.0, -6.7]}>
             <mesh>
-              <boxGeometry args={[4.0, 3.6, 0.2]} />
+              <boxGeometry args={[3.8, 3.6, 0.2]} />
               <meshStandardMaterial color="#334155" metalness={0.7} />
             </mesh>
-            {/* Parked 53-Ft Logistics Semi-Trailers on Docks 1 & 3 */}
-            {(idx === 0 || idx === 2) && (
-              <group position={[0, 0.2, -6.5]}>
-                <mesh position={[0, 0, 0]}>
-                  <boxGeometry args={[3.2, 3.4, 11]} />
+            {idx === 1 && (
+              <group position={[0, 0.2, -6.0]}>
+                <mesh>
+                  <boxGeometry args={[3.0, 3.4, 10.5]} />
                   <meshStandardMaterial color="#ffffff" roughness={0.4} />
                 </mesh>
                 <mesh position={[0, -1.6, 0]}>
-                  <boxGeometry args={[3.0, 0.25, 10.8]} />
+                  <boxGeometry args={[2.8, 0.25, 10.2]} />
                   <meshStandardMaterial color="#dc2626" />
                 </mesh>
               </group>
@@ -310,16 +408,16 @@ function HyperscaleTripleCampus() {
         ))}
       </group>
 
-      {/* Backup Diesel Generator Yard (West Side of Campus) */}
-      <group position={[-20, 0, 0]}>
+      {/* Backup Diesel Generator Yard (West Side) */}
+      <group position={[-18, 0, 0]}>
         <mesh position={[0, 0.15, 0]}>
-          <boxGeometry args={[6, 0.3, 40]} />
+          <boxGeometry args={[5.5, 0.3, 38]} />
           <meshStandardMaterial color="#334155" />
         </mesh>
         {[-14, -6, 2, 10, 18].map((gz) => (
           <group key={gz} position={[0, 0.3, gz]}>
             <mesh position={[0, 1.5, 0]}>
-              <boxGeometry args={[4.8, 2.6, 3.4]} />
+              <boxGeometry args={[4.6, 2.6, 3.2]} />
               <meshStandardMaterial color="#374151" metalness={0.7} />
             </mesh>
             <mesh position={[1.4, 3.6, 0]}>
@@ -335,7 +433,6 @@ function HyperscaleTripleCampus() {
 
 /**
  * Authentic Curving Suburban Residential Neighborhood (West Boundary)
- * Faithfully mirrors the satellite map: curving streets, cul-de-sacs, and 20+ two-story family homes
  */
 function CurvingResidentialNeighborhood({ site, timeOfDay }) {
   const isNight = timeOfDay === "night";
@@ -343,22 +440,18 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
   const windowEmissive = isNight ? "#eab308" : "#000000";
   const windowIntensity = isNight ? 1.4 : 0.0;
 
-  // Generate houses along realistic curving suburban avenues and cul-de-sacs
   const housePositions = useMemo(() => {
     const list = [];
     const sidingPalette = ["#f8fafc", "#e2e8f0", "#e5dcd3", "#cbd5e1", "#f1f5f9", "#e2d2b8", "#dbeafe"];
     const roofPalette = ["#334155", "#1e293b", "#475569", "#374151", "#4a3c31", "#1e293b", "#334155"];
     const carPalette = ["#dc2626", "#0284c7", "#475569", "#ffffff", "#10b981", "#eab308", "#1e293b"];
 
-    // Main Curving North-South Suburban Avenue
     for (let z = -55; z <= 55; z += 12) {
-      // Gentle curvilinear road trajectory
-      const curveX = -36 - Math.sin((z + 10) * 0.035) * 8;
+      const curveX = -32 - Math.sin((z + 10) * 0.035) * 8;
 
-      // House on East side of street (facing Data Center buffer)
       list.push({
         id: `h_east_${z}`,
-        x: curveX + 9,
+        x: curveX + 8,
         z: z,
         rotY: -Math.PI / 2,
         siding: sidingPalette[Math.abs(Math.round(z)) % sidingPalette.length],
@@ -366,10 +459,9 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
         car: carPalette[Math.abs(Math.round(z * 3)) % carPalette.length],
       });
 
-      // House on West side of street (interior neighborhood)
       list.push({
         id: `h_west_${z}`,
-        x: curveX - 9,
+        x: curveX - 8,
         z: z + 3,
         rotY: Math.PI / 2,
         siding: sidingPalette[(Math.abs(Math.round(z)) + 2) % sidingPalette.length],
@@ -378,13 +470,12 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
       });
     }
 
-    // Cul-de-Sac Court Branching to the West at z = 4
-    for (let cx = -48; cx >= -68; cx -= 9) {
+    for (let cx = -44; cx >= -64; cx -= 9) {
       list.push({
         id: `h_cul_${cx}`,
         x: cx,
-        z: cx === -68 ? 4 : cx % 2 === 0 ? 12 : -4,
-        rotY: cx === -68 ? 0 : cx % 2 === 0 ? Math.PI : 0,
+        z: cx === -64 ? 4 : cx % 2 === 0 ? 12 : -4,
+        rotY: cx === -64 ? 0 : cx % 2 === 0 ? Math.PI : 0,
         siding: sidingPalette[Math.abs(cx) % sidingPalette.length],
         roof: roofPalette[Math.abs(cx) % roofPalette.length],
         car: carPalette[Math.abs(cx * 2) % carPalette.length],
@@ -396,28 +487,25 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
 
   return (
     <group>
-      {/* 1. Curving Suburban Paved Street */}
+      {/* Curving Suburban Paved Street */}
       {[-50, -35, -20, -5, 10, 25, 40, 55].map((segmentZ) => {
-        const segX = -36 - Math.sin((segmentZ + 10) * 0.035) * 8;
+        const segX = -32 - Math.sin((segmentZ + 10) * 0.035) * 8;
         return (
           <group key={segmentZ} position={[segX, 0.02, segmentZ]}>
-            {/* Asphalt Pavement */}
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[10, 18]} />
+              <planeGeometry args={[9, 18]} />
               <meshStandardMaterial color="#1e293b" roughness={0.8} />
             </mesh>
-            {/* Concrete Sidewalk on Neighborhood Edge */}
-            <mesh position={[-5.6, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[1.5, 18]} />
+            <mesh position={[-5.0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[1.4, 18]} />
               <meshStandardMaterial color="#cbd5e1" roughness={0.7} />
             </mesh>
-            {/* Yellow Centerline */}
             <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <planeGeometry args={[0.22, 17]} />
               <meshBasicMaterial color="#fef08a" transparent opacity={0.6} />
             </mesh>
-            {/* Modern Residential Streetlight */}
-            <group position={[-6.2, 0, 0]}>
+            {/* Streetlight */}
+            <group position={[-5.6, 0, 0]}>
               <mesh position={[0, 2.6, 0]}>
                 <cylinderGeometry args={[0.06, 0.08, 5.2, 8]} />
                 <meshStandardMaterial color="#64748b" metalness={0.8} />
@@ -427,80 +515,52 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
                 <meshStandardMaterial color="#64748b" />
               </mesh>
               {isNight && (
-                <pointLight position={[0.8, 5.4, 0]} intensity={10} distance={22} color="#fef08a" />
+                <pointLight position={[0.8, 5.4, 0]} intensity={9} distance={20} color="#fef08a" />
               )}
             </group>
           </group>
         );
       })}
 
-      {/* 2. Cul-de-Sac Branch Road */}
-      <group position={[-56, 0.02, 4]}>
+      {/* Cul-de-Sac Branch Road */}
+      <group position={[-52, 0.02, 4]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[26, 9]} />
+          <planeGeometry args={[24, 8.5]} />
           <meshStandardMaterial color="#1e293b" roughness={0.8} />
         </mesh>
-        {/* Bulb at end of cul-de-sac */}
-        <mesh position={[-12, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[9, 24]} />
+        <mesh position={[-11, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[8.5, 24]} />
           <meshStandardMaterial color="#1e293b" roughness={0.8} />
         </mesh>
       </group>
 
-      {/* 3. The 20+ Suburban Family Homes */}
+      {/* Suburban Homes */}
       {housePositions.map((h) => (
         <group key={h.id} position={[h.x, 0, h.z]} rotation={[0, h.rotY, 0]}>
-          {/* Manicured Front Green Lawn */}
-          <mesh position={[-3.5, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[8.5, 11]} />
+          <mesh position={[-3.2, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[8.0, 10]} />
             <meshStandardMaterial color={site.terrainType === "desert_plain" ? "#4a3520" : "#1a4623"} />
           </mesh>
-
-          {/* Concrete Driveway */}
-          <mesh position={[-3.2, 0.035, 2.8]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[6.5, 2.8]} />
+          <mesh position={[-2.8, 0.035, 2.6]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[6.0, 2.6]} />
             <meshStandardMaterial color="#64748b" roughness={0.85} />
           </mesh>
-
-          {/* Parked Car */}
-          <group position={[-2.8, 0.65, 2.8]}>
+          <group position={[-2.5, 0.65, 2.6]}>
             <mesh>
-              <boxGeometry args={[3.0, 1.1, 1.7]} />
+              <boxGeometry args={[2.8, 1.1, 1.6]} />
               <meshStandardMaterial color={h.car} roughness={0.3} metalness={0.7} />
             </mesh>
-            <mesh position={[-0.3, 0.65, 0]}>
-              <boxGeometry args={[1.7, 0.75, 1.5]} />
-              <meshStandardMaterial color="#0f172a" metalness={0.9} />
-            </mesh>
           </group>
-
-          {/* Two-Story House Main Body */}
-          <mesh position={[1.8, 2.5, 0]}>
-            <boxGeometry args={[7.2, 5.0, 8.4]} />
+          <mesh position={[1.6, 2.4, 0]}>
+            <boxGeometry args={[6.8, 4.8, 8.0]} />
             <meshStandardMaterial color={h.siding} roughness={0.65} />
           </mesh>
-
-          {/* Front Porch & Entry Door */}
-          <group position={[-2.0, 1.1, 0]}>
-            <mesh position={[0, -0.5, 0]}>
-              <boxGeometry args={[1.4, 0.25, 2.8]} />
-              <meshStandardMaterial color="#94a3b8" />
-            </mesh>
-            <mesh position={[0, 1.1, 0]}>
-              <boxGeometry args={[1.4, 0.2, 3.0]} />
-              <meshStandardMaterial color="#334155" />
-            </mesh>
-          </group>
-
-          {/* Gabled Architectural Shingle Roof */}
-          <mesh position={[1.8, 5.9, 0]} rotation={[0, 0, Math.PI / 4]}>
-            <boxGeometry args={[5.8, 5.8, 8.8]} />
+          <mesh position={[1.6, 5.6, 0]} rotation={[0, 0, Math.PI / 4]}>
+            <boxGeometry args={[5.5, 5.5, 8.4]} />
             <meshStandardMaterial color={h.roof} roughness={0.8} />
           </mesh>
-
-          {/* Windows (Warm golden glow at night) */}
-          <mesh position={[-1.85, 2.6, 2.0]}>
-            <planeGeometry args={[1.4, 1.4]} />
+          <mesh position={[-1.75, 2.5, 1.8]}>
+            <planeGeometry args={[1.3, 1.3]} />
             <meshStandardMaterial
               color={windowColor}
               emissive={windowEmissive}
@@ -508,20 +568,14 @@ function CurvingResidentialNeighborhood({ site, timeOfDay }) {
               side={DoubleSide}
             />
           </mesh>
-          <mesh position={[-1.85, 2.6, -2.0]}>
-            <planeGeometry args={[1.4, 1.4]} />
+          <mesh position={[-1.75, 2.5, -1.8]}>
+            <planeGeometry args={[1.3, 1.3]} />
             <meshStandardMaterial
               color={windowColor}
               emissive={windowEmissive}
               emissiveIntensity={windowIntensity}
               side={DoubleSide}
             />
-          </mesh>
-
-          {/* Fenced Backyard */}
-          <mesh position={[5.8, 0.8, 0]}>
-            <boxGeometry args={[0.1, 1.6, 10.5]} />
-            <meshStandardMaterial color="#78350f" roughness={0.9} />
           </mesh>
         </group>
       ))}
@@ -607,12 +661,11 @@ function DraggableChillerYard({
     >
       {isSelected && <SelectionRing radius={10} label="CHILLERS · DRAGGABLE" />}
 
-      {/* Concrete Equipment Housekeeping Pad */}
+      {/* Equipment Pad */}
       <mesh position={[0, 0.15, 0]}>
         <boxGeometry args={[14, 0.3, 26]} />
         <meshStandardMaterial color={isSelected ? "#38bdf8" : "#334155"} roughness={0.8} />
       </mesh>
-      {/* Perimeter Safety Yellow Warning Stripes */}
       <mesh position={[0, 0.16, 12.8]}>
         <boxGeometry args={[13.8, 0.05, 0.4]} />
         <meshStandardMaterial color="#eab308" />
@@ -621,16 +674,6 @@ function DraggableChillerYard({
         <boxGeometry args={[13.8, 0.05, 0.4]} />
         <meshStandardMaterial color="#eab308" />
       </mesh>
-
-      {/* Subterranean Excavation Bunker Walls */}
-      {item.placement === "underground" && (
-        <group>
-          <mesh position={[8, 3, 0]}><boxGeometry args={[0.8, 6, 28]} /><meshStandardMaterial color="#1e293b" /></mesh>
-          <mesh position={[-8, 3, 0]}><boxGeometry args={[0.8, 6, 28]} /><meshStandardMaterial color="#1e293b" /></mesh>
-          <mesh position={[0, 3, 14]}><boxGeometry args={[16, 6, 0.8]} /><meshStandardMaterial color="#1e293b" /></mesh>
-          <mesh position={[0, 3, -14]}><boxGeometry args={[16, 6, 0.8]} /><meshStandardMaterial color="#1e293b" /></mesh>
-        </group>
-      )}
 
       {/* 3 Modular V-Bank Chiller Units */}
       <group rotation={[0, radAngle, 0]}>
@@ -726,7 +769,6 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
     >
       {isSelected && <SelectionRing radius={length / 2 + 2} label="WALL · DRAGGABLE" />}
 
-      {/* Main Wall Slab */}
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[0.55, height, length]} />
         <meshStandardMaterial
@@ -738,7 +780,6 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
         />
       </mesh>
 
-      {/* Structural Steel Columns */}
       {[-12, -6, 0, 6, 12].map((z) => (
         <mesh key={z} position={[0.3, height / 2, z]}>
           <boxGeometry args={[0.35, height + 0.3, 0.35]} />
@@ -746,7 +787,6 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
         </mesh>
       ))}
 
-      {/* 3D Elevation Dimension Callout */}
       <sprite position={[0, height + 1.8, 0]} scale={[6.0, 1.4, 1]}>
         <spriteMaterial map={dimensionTexture} depthTest={false} />
       </sprite>
@@ -950,12 +990,12 @@ export default function AcousticSiteSandbox3D({
   const [isDragging, setIsDragging] = useState(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
 
-  // Initialize Layout Items (Chillers at x=4, Homes to the West at x=-28)
+  // Layout Items (Chillers in campus core, Homes to the West at x=-26)
   const [layoutItems, setLayoutItems] = useState(() => [
     {
       id: "chiller_compound",
       type: "chiller",
-      x: 4,
+      x: 2,
       z: 0,
       placement: "side_exposed",
       silencers: false,
@@ -982,7 +1022,7 @@ export default function AcousticSiteSandbox3D({
     {
       id: "probe_1",
       type: "probe",
-      x: -30,
+      x: -26,
       z: 0,
     },
   ]);
@@ -993,7 +1033,7 @@ export default function AcousticSiteSandbox3D({
       {
         id: "chiller_compound",
         type: "chiller",
-        x: site.id === "the_dalles_or" ? 22 : 4,
+        x: site.id === "the_dalles_or" ? 18 : 2,
         z: 0,
         placement: site.id === "the_dalles_or" ? "rear_shielded" : "side_exposed",
         silencers: site.id === "dublin_ie",
@@ -1020,7 +1060,7 @@ export default function AcousticSiteSandbox3D({
       {
         id: "probe_1",
         type: "probe",
-        x: -30,
+        x: -26,
         z: 0,
       },
     ]);
@@ -1107,19 +1147,19 @@ export default function AcousticSiteSandbox3D({
   };
 
   const chiller = layoutItems.find((i) => i.type === "chiller") || {
-    x: 4,
+    x: 2,
     z: 0,
     placement: "side_exposed",
     silencers: false,
     rotation: 0,
   };
-  const probe = layoutItems.find((i) => i.type === "probe") || { x: -30, z: 0 };
+  const probe = layoutItems.find((i) => i.type === "probe") || { x: -26, z: 0 };
   const walls = layoutItems.filter((i) => i.type === "wall");
   const treeClusters = layoutItems.filter((i) => i.type === "tree_cluster");
 
   const selectedItem = layoutItems.find((i) => i.id === selectedId);
 
-  // REAL-TIME ACOUSTIC CALCULATION BASED ON 3D PLACEMENT
+  // REAL-TIME ACOUSTIC CALCULATION
   const acousticResults = useMemo(() => {
     const tempPenalty = Math.max(0, (site.ambientTempC - 20) * 0.4);
     const fanRatio = Math.max(0.2, fanSpeedPercent / 100);
@@ -1128,16 +1168,16 @@ export default function AcousticSiteSandbox3D({
     const baseLw = 108.0;
     const sourceLw = baseLw + tempPenalty + fanSpeedPenalty + powerScale;
 
-    // Real-world distance from chiller to probe
+    // Distance from chiller to probe
     const dx = probe.x - chiller.x;
     const dz = probe.z - chiller.z;
     const sceneDist = Math.hypot(dx, dz);
-    const distanceMeters = Math.max(15, Math.round((sceneDist / 34) * site.defaultDistanceToHomesMeters));
+    const distanceMeters = Math.max(15, Math.round((sceneDist / 28) * site.defaultDistanceToHomesMeters));
     const distanceDecay = 20 * Math.log10(distanceMeters) + 11;
 
-    // Building Shielding (If chiller is moved to East side of data center buildings, e.g. x > 18)
+    // Building Shielding
     let buildingShieldingDb = 0;
-    if (chiller.x > 16 && probe.x < -10) {
+    if (chiller.x > 14 && probe.x < -10) {
       buildingShieldingDb = 17.5;
     }
 
@@ -1243,7 +1283,7 @@ export default function AcousticSiteSandbox3D({
         <div className="top-site-badge">
           <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
           <span className="top-site-name">{site.name}</span>
-          <span className="top-site-tag">300M RADIUS SIMULATION</span>
+          <span className="top-site-tag">300M 360° SPATIAL TWIN</span>
         </div>
 
         <div className="top-time-toggle">
@@ -1269,12 +1309,19 @@ export default function AcousticSiteSandbox3D({
           {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
         </button>
 
+        {/* View Presets Bar (Full 300m, East Highway, West Homes, 2D Plan) */}
         <div className="top-camera-group">
-          <button className="top-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D schematic">
-            🗺️ 2D Plan
+          <button className="top-cam-btn" onClick={() => setCameraPreset("reset")} title="Expansive 300m Bird's-Eye View">
+            ↺ 300m Campus
           </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("reset")} title="Isometric 3D perspective">
-            ↺ 3D View
+          <button className="top-cam-btn" onClick={() => setCameraPreset("highway")} title="Focus East on Route 28 Highway">
+            🛣️ Highway
+          </button>
+          <button className="top-cam-btn" onClick={() => setCameraPreset("homes")} title="Focus West on Residential Subdivision">
+            🏡 Homes
+          </button>
+          <button className="top-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D Map Plan View">
+            🗺️ 2D Plan
           </button>
         </div>
       </div>
@@ -1320,11 +1367,10 @@ export default function AcousticSiteSandbox3D({
         }}
       >
         <WebGLBoundary>
-          <Canvas camera={{ position: [-20, 52, 68], fov: 45 }} dpr={[1, 1.5]}>
-            {/* Cinematic Sky Lighting: Twilight Midnight Blue at Night, Azure in Day */}
+          {/* Default Camera Framed to Fit Complete 300m Radius (Center 0, 115, 125, FOV 42) */}
+          <Canvas camera={{ position: [0, 115, 125], fov: 42 }} dpr={[1, 1.5]}>
             <color attach="background" args={[isNight ? "#0c1527" : "#38bdf8"]} />
-            {/* High-visibility ambient light so night view is beautifully illuminated */}
-            <ambientLight intensity={isNight ? 1.4 : 2.2} color={isNight ? "#94a3b8" : "#ffffff"} />
+            <ambientLight intensity={isNight ? 1.5 : 2.2} color={isNight ? "#94a3b8" : "#ffffff"} />
             <directionalLight
               position={isNight ? [-30, 60, -40] : [40, 70, 50]}
               intensity={isNight ? 1.5 : 3.0}
@@ -1332,14 +1378,14 @@ export default function AcousticSiteSandbox3D({
               castShadow
             />
 
-            {/* Night Architectural Floodlights over Data Center Compound */}
+            {/* Night Architectural Lighting */}
             {isNight && (
-              <group position={[8, 14, 0]}>
-                <pointLight intensity={25} distance={65} color="#f8fafc" />
+              <group position={[4, 14, 0]}>
+                <pointLight intensity={25} distance={70} color="#f8fafc" />
               </group>
             )}
 
-            {/* Authentic Ground Terrain (Curving Roads, Stream, Highway, Retention Basin) */}
+            {/* Authentic Ground Terrain (Highway East, Neighborhood West, Roads, Retention Basin) */}
             <RealisticCampusTerrain
               site={site}
               timeOfDay={timeOfDay}
@@ -1348,7 +1394,7 @@ export default function AcousticSiteSandbox3D({
               onDeselect={() => setSelectedId(null)}
             />
 
-            {/* 3 Hyperscale Angled Compute Buildings (Matches Satellite Map Footprint) */}
+            {/* 3 Angled Hyperscale Compute Buildings (Satellite Map Footprint) */}
             <HyperscaleTripleCampus />
 
             {/* Curving Suburban Residential Subdivision (West Boundary within 300m) */}
@@ -1364,7 +1410,7 @@ export default function AcousticSiteSandbox3D({
               onPointerDown={(id) => setIsDragging(id)}
             />
 
-            {/* Draggable Acoustic Barrier Walls */}
+            {/* Draggable Barrier Walls */}
             {walls.map((wall) => (
               <DraggableWall
                 key={wall.id}
@@ -1566,10 +1612,10 @@ export default function AcousticSiteSandbox3D({
           className="dock-btn"
           onClick={() => {
             setLayoutItems([
-              { id: "chiller_compound", type: "chiller", x: 4, z: 0, placement: "side_exposed", silencers: false, rotation: 0 },
+              { id: "chiller_compound", type: "chiller", x: 2, z: 0, placement: "side_exposed", silencers: false, rotation: 0 },
               { id: "wall_1", type: "wall", x: -10, z: 0, height: 8, length: 32, rotation: 0, material: "absorptive_metal" },
               { id: "tree_1", type: "tree_cluster", x: -18, z: 0, depth: 18, speciesId: site.recommendedTreeId || "virginia_pine" },
-              { id: "probe_1", type: "probe", x: -30, z: 0 },
+              { id: "probe_1", type: "probe", x: -26, z: 0 },
             ]);
             setSelectedId(null);
           }}
