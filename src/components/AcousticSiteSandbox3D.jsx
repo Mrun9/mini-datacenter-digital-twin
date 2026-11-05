@@ -2,7 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, DoubleSide } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../simulation/datacenterSites.js";
+import { WALL_MATERIALS, REGIONAL_TREE_SPECIES, getTreeSuitability } from "../simulation/datacenterSites.js";
 import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 import { calculateEnergyMetrics } from "../simulation/energy.js";
 import { evaluateSiteAcoustics } from "../simulation/acoustics.js";
@@ -657,27 +657,52 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
   const height = item.height || 8;
   const length = item.length || 28;
   const rot = ((item.rotation || 0) * Math.PI) / 180;
+  const angleDeg = Math.round(((item.rotation || 0) % 360 + 360) % 360);
   const materialConfig = WALL_MATERIALS[item.material] || WALL_MATERIALS.absorptive_metal;
   const isTransparent = item.material === "transparent_acrylic";
   const isGreen = item.material?.startsWith("green_wall");
   const isMasonry = item.material === "masonry_brick";
   const isSteel = item.material === "steel_aluminum";
   const isThickConcrete = item.material === "concrete_thick";
+  const isCurved = item.shape === "curved";
+  const curveAngleDeg = item.curveAngle || 60;
+  const curveAngleRad = (curveAngleDeg * Math.PI) / 180;
 
   // Wall physical thickness in 3D:
   // Standard 4" ~ 0.45m, 4.5"+ low-freq / masonry ~ 0.58m, living wall with cassettes ~ 0.72m
   const wallThickness = isGreen ? 0.72 : isMasonry || isThickConcrete ? 0.58 : 0.45;
 
+  // Compute curved segments along an arc of total angle curveAngleRad
+  const curvedSegments = useMemo(() => {
+    if (!isCurved) return [];
+    const numSegs = 8;
+    const radius = Math.max(14, length / curveAngleRad);
+    const segWidth = (radius * curveAngleRad) / numSegs;
+    const segs = [];
+    for (let i = 0; i < numSegs; i++) {
+      const alpha = -curveAngleRad / 2 + (i + 0.5) * (curveAngleRad / numSegs);
+      const x = radius * (Math.cos(alpha) - Math.cos(curveAngleRad / 2));
+      const z = radius * Math.sin(alpha);
+      segs.push({
+        x,
+        z,
+        rotY: -alpha,
+        width: segWidth + 0.18,
+      });
+    }
+    return segs;
+  }, [isCurved, length, curveAngleRad]);
+
   const dimensionTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 380;
-    canvas.height = 76;
+    canvas.width = 400;
+    canvas.height = 80;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
     if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 380, 76, 12);
+      ctx.roundRect(0, 0, 400, 80, 12);
     } else {
-      ctx.rect(0, 0, 380, 76);
+      ctx.rect(0, 0, 400, 80);
     }
     ctx.fill();
     ctx.strokeStyle = isSelected ? "#38bdf8" : materialConfig.color;
@@ -687,15 +712,18 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
     ctx.textAlign = "center";
     ctx.font = "bold 20px monospace";
     ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
-    const titleText = `${materialConfig.shortName || "WALL"}: H = ${height}.0m`;
-    ctx.fillText(titleText, 190, 34);
+    const shapeText = isCurved ? ` · Arc ${curveAngleDeg}°` : "";
+    const titleText = `${materialConfig.shortName || "WALL"}: H=${height}m · ${angleDeg}°${shapeText}`;
+    ctx.fillText(titleText, 200, 34);
 
     ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, sans-serif";
     ctx.fillStyle = isSelected ? "#bae6fd" : "#34d399";
-    ctx.fillText(materialConfig.soundDropLabel ? `📉 ${materialConfig.soundDropLabel}` : "Acoustic Barrier", 190, 58);
+    const bonusText = isCurved ? ` (Wrap Shield +2dB)` : "";
+    const dropText = materialConfig.soundDropLabel ? `📉 ${materialConfig.soundDropLabel}${bonusText}` : "Acoustic Barrier";
+    ctx.fillText(dropText, 200, 60);
 
     return new CanvasTexture(canvas);
-  }, [height, isSelected, materialConfig]);
+  }, [height, isSelected, materialConfig, angleDeg, isCurved, curveAngleDeg]);
 
   useEffect(() => () => dimensionTexture.dispose(), [dimensionTexture]);
 
@@ -712,48 +740,211 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
       {isSelected && (
         <SelectionRing
           radius={length / 2 + 2}
-          label={`${(materialConfig.shortName || "WALL").toUpperCase()} · DRAGGABLE`}
+          label={`${(materialConfig.shortName || "WALL").toUpperCase()} · ${angleDeg}° · DRAGGABLE`}
         />
       )}
 
-      {/* Main Structural Barrier Slab */}
-      <mesh position={[0, height / 2, 0]}>
-        <boxGeometry args={[wallThickness, height, length]} />
-        <meshStandardMaterial
-          color={isSelected ? "#0284c7" : materialConfig.color}
-          roughness={isTransparent ? 0.05 : isGreen ? 0.88 : isMasonry ? 0.8 : 0.55}
-          metalness={isSteel ? 0.85 : item.material === "absorptive_metal" ? 0.65 : 0.08}
-          transparent={isTransparent}
-          opacity={isTransparent ? 0.45 : 1.0}
-        />
-      </mesh>
-
-      {/* Steel H-Beam Foundation Posts */}
-      {[-12, -6, 0, 6, 12].map((z) => (
-        <mesh key={z} position={[wallThickness / 2 + 0.08, height / 2, z]}>
-          <boxGeometry args={[0.26, height + 0.3, 0.26]} />
-          <meshStandardMaterial color="#0f172a" metalness={0.9} />
-        </mesh>
-      ))}
-
-      {/* Living Wall Biophilic Folige Cassettes & Planter Rail */}
-      {isGreen && (
+      {/* Render Curved Arc or Straight Slab */}
+      {isCurved ? (
+        <group>
+          {curvedSegments.map((seg, idx) => (
+            <group key={idx} position={[seg.x, 0, seg.z]} rotation={[0, seg.rotY, 0]}>
+              <mesh position={[0, height / 2, 0]}>
+                <boxGeometry args={[wallThickness, height, seg.width]} />
+                <meshStandardMaterial
+                  color={isSelected ? "#0284c7" : materialConfig.color}
+                  roughness={isTransparent ? 0.05 : isGreen ? 0.88 : isMasonry ? 0.8 : 0.55}
+                  metalness={isSteel ? 0.85 : item.material === "absorptive_metal" ? 0.65 : 0.08}
+                  transparent={isTransparent}
+                  opacity={isTransparent ? 0.45 : 1.0}
+                />
+              </mesh>
+              {/* Joint post */}
+              <mesh position={[wallThickness / 2 + 0.06, height / 2, 0]}>
+                <boxGeometry args={[0.22, height + 0.2, 0.22]} />
+                <meshStandardMaterial color="#0f172a" metalness={0.9} />
+              </mesh>
+              {/* Green wall cassette accents */}
+              {isGreen && (
+                <mesh position={[wallThickness / 2 + 0.05, height * 0.48, 0]}>
+                  <boxGeometry args={[0.1, height * 0.72, seg.width * 0.85]} />
+                  <meshStandardMaterial color="#16a34a" roughness={0.95} />
+                </mesh>
+              )}
+            </group>
+          ))}
+        </group>
+      ) : (
         <>
-          <mesh position={[0, height + 0.12, 0]}>
-            <boxGeometry args={[wallThickness + 0.15, 0.24, length + 0.2]} />
-            <meshStandardMaterial color="#14532d" roughness={0.7} />
+          {/* Main Structural Barrier Slab */}
+          <mesh position={[0, height / 2, 0]}>
+            <boxGeometry args={[wallThickness, height, length]} />
+            <meshStandardMaterial
+              color={isSelected ? "#0284c7" : materialConfig.color}
+              roughness={isTransparent ? 0.05 : isGreen ? 0.88 : isMasonry ? 0.8 : 0.55}
+              metalness={isSteel ? 0.85 : item.material === "absorptive_metal" ? 0.65 : 0.08}
+              transparent={isTransparent}
+              opacity={isTransparent ? 0.45 : 1.0}
+            />
           </mesh>
-          {[-8, -2, 4, 10].map((z) => (
-            <mesh key={`green_cassette_${z}`} position={[wallThickness / 2 + 0.06, height * 0.48, z]}>
-              <boxGeometry args={[0.12, height * 0.72, 3.2]} />
-              <meshStandardMaterial color="#16a34a" roughness={0.95} />
+
+          {/* Steel H-Beam Foundation Posts */}
+          {[-12, -6, 0, 6, 12].map((z) => (
+            <mesh key={z} position={[wallThickness / 2 + 0.08, height / 2, z]}>
+              <boxGeometry args={[0.26, height + 0.3, 0.26]} />
+              <meshStandardMaterial color="#0f172a" metalness={0.9} />
             </mesh>
           ))}
+
+          {/* Living Wall Biophilic Foliage Cassettes & Planter Rail */}
+          {isGreen && (
+            <>
+              <mesh position={[0, height + 0.12, 0]}>
+                <boxGeometry args={[wallThickness + 0.15, 0.24, length + 0.2]} />
+                <meshStandardMaterial color="#14532d" roughness={0.7} />
+              </mesh>
+              {[-8, -2, 4, 10].map((z) => (
+                <mesh key={`green_cassette_${z}`} position={[wallThickness / 2 + 0.06, height * 0.48, z]}>
+                  <boxGeometry args={[0.12, height * 0.72, 3.2]} />
+                  <meshStandardMaterial color="#16a34a" roughness={0.95} />
+                </mesh>
+              ))}
+            </>
+          )}
         </>
       )}
 
       {/* Dimension & Noise Reduction Floating Sprite */}
-      <sprite position={[0, height + 1.9, 0]} scale={[6.6, 1.45, 1]}>
+      <sprite position={[0, height + 1.9, 0]} scale={[6.8, 1.45, 1]}>
+        <spriteMaterial map={dimensionTexture} depthTest={false} />
+      </sprite>
+    </group>
+  );
+}
+
+/**
+ * Draggable Single Tree (Individual Tree with Location Suitability & Calibrated Sound Drop)
+ */
+function DraggableSingleTree({ item, isSelected, site, onSelect, onPointerDown }) {
+  const height = item.height || 7;
+  const species = REGIONAL_TREE_SPECIES[item.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+  const suitability = getTreeSuitability(item.speciesId, site?.id);
+
+  const dimensionTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 380;
+    canvas.height = 84;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(0, 0, 380, 84, 12);
+    } else {
+      ctx.rect(0, 0, 380, 84);
+    }
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? "#38bdf8" : suitability.color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
+    ctx.fillText(`${species.icon || "🌲"} ${species.shortName || species.name} (H=${height}m)`, 190, 34);
+
+    ctx.font = "bold 14px monospace";
+    ctx.fillStyle = suitability.color;
+    ctx.fillText(`${suitability.badge} · ${species.soundDropLabel}`, 190, 62);
+
+    return new CanvasTexture(canvas);
+  }, [species, height, isSelected, suitability]);
+
+  useEffect(() => () => dimensionTexture.dispose(), [dimensionTexture]);
+
+  return (
+    <group
+      position={[item.x, 0, item.z]}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(item.id);
+        onPointerDown(item.id, e);
+      }}
+    >
+      {isSelected && (
+        <SelectionRing
+          radius={3.8}
+          label={`${(species.shortName || "TREE").toUpperCase()} · DRAGGABLE`}
+        />
+      )}
+
+      {/* Porous Ground Mulch Circle (Acoustic Ground Effect) */}
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[2.0, 16]} />
+        <meshStandardMaterial color="#2d2218" roughness={0.95} />
+      </mesh>
+
+      {/* Tree Trunk */}
+      <mesh position={[0, height * 0.25, 0]}>
+        <cylinderGeometry args={[0.18, 0.32, height * 0.5, 8]} />
+        <meshStandardMaterial color={species.trunkColor || "#3e2723"} roughness={0.9} />
+      </mesh>
+
+      {/* Foliage Canopy based on species.foliageShape */}
+      {species.foliageShape === "columnar" ? (
+        // Columnar (Irish Yew)
+        <mesh position={[0, height * 0.6, 0]}>
+          <cylinderGeometry args={[0.95, 0.95, height * 0.75, 10]} />
+          <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.8} />
+        </mesh>
+      ) : species.foliageShape === "oval" ? (
+        // Oval / Broadleaf (Poplar)
+        <mesh position={[0, height * 0.65, 0]}>
+          <sphereGeometry args={[height * 0.36, 12, 10]} />
+          <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.75} />
+        </mesh>
+      ) : species.foliageShape === "pyramidal" ? (
+        // Pyramidal (Arizona Cypress)
+        <>
+          <mesh position={[0, height * 0.52, 0]}>
+            <coneGeometry args={[1.6, height * 0.65, 8]} />
+            <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.85} />
+          </mesh>
+          <mesh position={[0, height * 0.72, 0]}>
+            <coneGeometry args={[1.0, height * 0.45, 8]} />
+            <meshStandardMaterial color={isSelected ? "#4ade80" : species.color} roughness={0.85} />
+          </mesh>
+        </>
+      ) : species.foliageShape === "tall_conical" ? (
+        // Tall Conical (Douglas Fir / Pacific Cedar)
+        <>
+          <mesh position={[0, height * 0.42, 0]}>
+            <coneGeometry args={[2.2, height * 0.45, 8]} />
+            <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, height * 0.62, 0]}>
+            <coneGeometry args={[1.6, height * 0.42, 8]} />
+            <meshStandardMaterial color={isSelected ? "#4ade80" : species.color} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, height * 0.82, 0]}>
+            <coneGeometry args={[1.0, height * 0.35, 8]} />
+            <meshStandardMaterial color={isSelected ? "#86efac" : species.color} roughness={0.8} />
+          </mesh>
+        </>
+      ) : (
+        // Standard Conical (Virginia Pine)
+        <>
+          <mesh position={[0, height * 0.48, 0]}>
+            <coneGeometry args={[1.8, height * 0.55, 8]} />
+            <meshStandardMaterial color={isSelected ? "#22c55e" : species.color} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, height * 0.72, 0]}>
+            <coneGeometry args={[1.2, height * 0.45, 8]} />
+            <meshStandardMaterial color={isSelected ? "#4ade80" : species.color} roughness={0.8} />
+          </mesh>
+        </>
+      )}
+
+      {/* Floating Info Sprite */}
+      <sprite position={[0, height + 1.6, 0]} scale={[6.4, 1.45, 1]}>
         <spriteMaterial map={dimensionTexture} depthTest={false} />
       </sprite>
     </group>
@@ -1111,6 +1302,14 @@ export default function AcousticSiteSandbox3D({
   const [selectedWallTypeToAdd, setSelectedWallTypeToAdd] = useState("absorptive_metal");
   const [newWallHeight, setNewWallHeight] = useState(8);
   const [newWallLength, setNewWallLength] = useState(28);
+  const [newWallShape, setNewWallShape] = useState("straight");
+  const [newWallAngle, setNewWallAngle] = useState(0);
+  const [newWallCurveArc, setNewWallCurveArc] = useState(60);
+
+  // Add Single Tree Modal State & Handlers
+  const [isAddTreeModalOpen, setIsAddTreeModalOpen] = useState(false);
+  const [selectedTreeSpeciesToAdd, setSelectedTreeSpeciesToAdd] = useState(site.recommendedTreeId || "virginia_pine");
+  const [newTreeHeight, setNewTreeHeight] = useState(7);
 
   const handleOpenAddWallModal = () => {
     setIsAddWallModalOpen(true);
@@ -1120,10 +1319,13 @@ export default function AcousticSiteSandbox3D({
     setIsAddWallModalOpen(false);
   };
 
-  const handleConfirmAddWall = (typeOverride, heightOverride, lengthOverride) => {
+  const handleConfirmAddWall = (typeOverride, heightOverride, lengthOverride, shapeOverride, angleOverride, arcOverride) => {
     const chosenType = typeOverride || selectedWallTypeToAdd || "absorptive_metal";
     const chosenHeight = heightOverride || newWallHeight || 8;
     const chosenLength = lengthOverride || newWallLength || 28;
+    const chosenShape = shapeOverride || newWallShape || "straight";
+    const chosenAngle = angleOverride !== undefined ? angleOverride : newWallAngle || 0;
+    const chosenArc = arcOverride || newWallCurveArc || 60;
 
     const newWall = {
       id: `wall_${Date.now()}`,
@@ -1132,7 +1334,9 @@ export default function AcousticSiteSandbox3D({
       z: (Math.random() - 0.5) * 20,
       height: chosenHeight,
       length: chosenLength,
-      rotation: 0,
+      rotation: chosenAngle,
+      shape: chosenShape,
+      curveAngle: chosenArc,
       material: chosenType,
     };
     setLayoutItems((prev) => [...prev, newWall]);
@@ -1140,22 +1344,52 @@ export default function AcousticSiteSandbox3D({
     setIsAddWallModalOpen(false);
   };
 
-  // Backwards-compatible quick add
+  const handleOpenAddTreeModal = () => {
+    setSelectedTreeSpeciesToAdd(site.recommendedTreeId || "virginia_pine");
+    setIsAddTreeModalOpen(true);
+  };
+
+  const handleCloseAddTreeModal = () => {
+    setIsAddTreeModalOpen(false);
+  };
+
+  const handleConfirmAddTree = (speciesOverride, heightOverride) => {
+    const chosenSpecies = speciesOverride || selectedTreeSpeciesToAdd || site.recommendedTreeId || "virginia_pine";
+    const chosenHeight = heightOverride || newTreeHeight || 7;
+
+    const newTree = {
+      id: `tree_${Date.now()}`,
+      type: "tree",
+      x: -16 + (Math.random() - 0.5) * 6,
+      z: (Math.random() - 0.5) * 22,
+      speciesId: chosenSpecies,
+      height: chosenHeight,
+    };
+    setLayoutItems((prev) => [...prev, newTree]);
+    setSelectedId(newTree.id);
+    setIsAddTreeModalOpen(false);
+  };
+
+  // Backwards-compatible quick adds
   const handleAddWall = () => {
     handleOpenAddWallModal();
   };
 
   const handleAddTrees = () => {
-    const newTrees = {
-      id: `tree_${Date.now()}`,
+    handleOpenAddTreeModal();
+  };
+
+  const handleAddTreeCluster = () => {
+    const newCluster = {
+      id: `cluster_${Date.now()}`,
       type: "tree_cluster",
       x: -18,
       z: (Math.random() - 0.5) * 24,
       depth: 16,
       speciesId: site.recommendedTreeId || "virginia_pine",
     };
-    setLayoutItems((prev) => [...prev, newTrees]);
-    setSelectedId(newTrees.id);
+    setLayoutItems((prev) => [...prev, newCluster]);
+    setSelectedId(newCluster.id);
   };
 
   const handleDeleteSelected = () => {
@@ -1181,6 +1415,7 @@ export default function AcousticSiteSandbox3D({
   };
   const probe = layoutItems.find((i) => i.type === "probe") || { x: -26, z: 0 };
   const walls = layoutItems.filter((i) => i.type === "wall");
+  const singleTrees = layoutItems.filter((i) => i.type === "tree");
   const treeClusters = layoutItems.filter((i) => i.type === "tree_cluster");
 
   const selectedItem = layoutItems.find((i) => i.id === selectedId);
@@ -1192,18 +1427,26 @@ export default function AcousticSiteSandbox3D({
     // Prefer the material of the currently selected wall if a wall is selected, else primary wall
     const activeWall = (selectedId && walls.find((w) => w.id === selectedId)) || walls[0];
     const wallMaterial = activeWall?.material || "absorptive_metal";
+    const wallShape = walls.some((w) => w.shape === "curved") ? "curved" : "straight";
     const wallEnclosure =
       walls.length >= 3 ? "full_4side" : walls.length === 2 ? "u_shape" : "single_east";
 
-    const hasTrees = treeClusters.length > 0;
-    const totalTreeDepth = hasTrees
-      ? treeClusters.reduce((sum, t) => sum + (t.depth || 16), 0)
-      : 0;
-    const primaryTree = treeClusters[0];
+    const hasTrees = singleTrees.length > 0 || treeClusters.length > 0;
+    const clusterDepth = treeClusters.reduce((sum, t) => sum + (t.depth || 16), 0);
+    const singleTreeDepth = singleTrees.reduce((sum, t) => {
+      const sp = REGIONAL_TREE_SPECIES[t.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+      return sum + (sp.acousticAbsorptionCoeff / 0.18) * 3.5;
+    }, 0);
+    const totalTreeDepth = clusterDepth + singleTreeDepth;
+
+    const activeTree = (selectedId && singleTrees.find((t) => t.id === selectedId)) ||
+      (selectedId && treeClusters.find((c) => c.id === selectedId)) ||
+      singleTrees[0] ||
+      treeClusters[0];
     const treeSpeciesId =
-      primaryTree?.speciesId || site.recommendedTreeId || "virginia_pine";
+      activeTree?.speciesId || site.recommendedTreeId || "virginia_pine";
     const treeArrangement =
-      treeClusters.length >= 2 ? "perimeter_ring" : "east_buffer";
+      (singleTrees.length + treeClusters.length) >= 2 ? "perimeter_ring" : "east_buffer";
 
     const dx = probe.x - chiller.x;
     const dz = probe.z - chiller.z;
@@ -1221,15 +1464,18 @@ export default function AcousticSiteSandbox3D({
       wallHeightMeters: maxWallHeight,
       wallMaterial,
       wallEnclosure,
+      wallShape,
       treeEnabled: hasTrees,
       treeBufferDepthMeters: totalTreeDepth,
       treeSpeciesId,
       treeArrangement,
+      singleTreeCount: singleTrees.length,
       distanceMeters,
       walls,
+      singleTrees,
       treeClusters,
     };
-  }, [walls, treeClusters, chiller, probe, site]);
+  }, [walls, singleTrees, treeClusters, chiller, probe, site, selectedId]);
 
   // Synchronize 3D layout state upstream to App and Dashboard
   useEffect(() => {
@@ -1254,10 +1500,12 @@ export default function AcousticSiteSandbox3D({
       wallMaterial: effectiveConfig.wallMaterial,
       wallEnabled: effectiveConfig.wallEnabled,
       wallEnclosure: effectiveConfig.wallEnclosure,
+      wallShape: effectiveConfig.wallShape,
       treeBufferDepthMeters: effectiveConfig.treeBufferDepthMeters,
       treeSpeciesId: effectiveConfig.treeSpeciesId,
       treeEnabled: effectiveConfig.treeEnabled,
       treeArrangement: effectiveConfig.treeArrangement,
+      singleTreeCount: effectiveConfig.singleTreeCount,
       chillerOrientationAngle: effectiveConfig.chillerOrientationAngle,
       acousticSilencers: effectiveConfig.acousticSilencers,
     });
@@ -1564,6 +1812,18 @@ export default function AcousticSiteSandbox3D({
               />
             ))}
 
+            {/* Draggable Single Bio-Acoustic Trees */}
+            {singleTrees.map((tree) => (
+              <DraggableSingleTree
+                key={tree.id}
+                item={tree}
+                site={site}
+                isSelected={selectedId === tree.id}
+                onSelect={setSelectedId}
+                onPointerDown={(id) => setIsDragging(id)}
+              />
+            ))}
+
             {/* Draggable Tree Buffers */}
             {treeClusters.map((trees) => (
               <DraggableTreeCluster
@@ -1622,6 +1882,83 @@ export default function AcousticSiteSandbox3D({
                   ))}
                 </select>
 
+                <span className="inspector-label">Shape:</span>
+                <div className="inspector-toggle-group">
+                  <button
+                    className={`inspector-pill-choice ${selectedItem.shape !== "curved" ? "active" : ""}`}
+                    onClick={() => updateSelectedItem({ shape: "straight" })}
+                    title="Straight Barrier Wall"
+                  >
+                    Straight
+                  </button>
+                  <button
+                    className={`inspector-pill-choice ${selectedItem.shape === "curved" ? "active" : ""}`}
+                    onClick={() => updateSelectedItem({ shape: "curved", curveAngle: selectedItem.curveAngle || 60 })}
+                    title="Curved Arc Wall (+2dB wrap-around shielding against flanking noise)"
+                  >
+                    ⌒ Curved (+2dB)
+                  </button>
+                </div>
+
+                {selectedItem.shape === "curved" && (
+                  <>
+                    <span className="inspector-label">Arc:</span>
+                    <input
+                      type="range"
+                      min="30"
+                      max="120"
+                      step="5"
+                      value={selectedItem.curveAngle || 60}
+                      onChange={(e) => updateSelectedItem({ curveAngle: Number(e.target.value) })}
+                      className="inspector-angle-range"
+                      title="Curvature arc angle"
+                    />
+                    <span className="inspector-val">{selectedItem.curveAngle || 60}°</span>
+                  </>
+                )}
+
+                <span className="inspector-label">Rotation:</span>
+                <div className="inspector-angle-control-group">
+                  <input
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={Math.round(((selectedItem.rotation || 0) % 360 + 360) % 360)}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (!isNaN(val)) {
+                        updateSelectedItem({ rotation: ((val % 360) + 360) % 360 });
+                      }
+                    }}
+                    className="inspector-angle-number-input"
+                    title="Direct angle input (e.g. 56°)"
+                  />
+                  <span className="inspector-unit">°</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={Math.round(((selectedItem.rotation || 0) % 360 + 360) % 360)}
+                    onChange={(e) => updateSelectedItem({ rotation: Number(e.target.value) })}
+                    className="inspector-angle-range"
+                    title="Slide to rotate wall to any angle (0° - 360°)"
+                  />
+                  <div className="inspector-angle-chips">
+                    {[0, 45, 56, 90, 135, 180].map((deg) => (
+                      <button
+                        key={deg}
+                        className={`angle-chip-btn ${Math.round(((selectedItem.rotation || 0) % 360 + 360) % 360) === deg ? "active" : ""}`}
+                        onClick={() => updateSelectedItem({ rotation: deg })}
+                        title={`Set angle to ${deg}°`}
+                      >
+                        {deg}°
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <span className="inspector-label">Height:</span>
                 <button
                   className="inspector-step-btn"
@@ -1642,11 +1979,12 @@ export default function AcousticSiteSandbox3D({
                 {(() => {
                   const curMat = WALL_MATERIALS[selectedItem.material] || WALL_MATERIALS.absorptive_metal;
                   const wArea = (selectedItem.length || 28) * (selectedItem.height || 8);
-                  const wCost = Math.round(wArea * curMat.costPerSqMeter);
+                  const isCurvedWall = selectedItem.shape === "curved";
+                  const wCost = Math.round(wArea * curMat.costPerSqMeter * (isCurvedWall ? 1.15 : 1.0));
                   return (
                     <div className="inspector-badge-row">
                       <span className="inspector-stat-pill drop" title="Rated sound drop">
-                        📉 {curMat.soundDropLabel}
+                        📉 {curMat.soundDropLabel} {isCurvedWall ? "(+2dB Wrap)" : ""}
                       </span>
                       <span className="inspector-stat-pill cost" title="Estimated section cost">
                         💰 ${wCost.toLocaleString()}
@@ -1656,17 +1994,82 @@ export default function AcousticSiteSandbox3D({
                 })()}
 
                 <button
-                  className="inspector-tool-btn"
-                  onClick={() => updateSelectedItem({ rotation: ((selectedItem.rotation || 0) + 90) % 180 })}
-                  title="Rotate wall 90 degrees"
+                  className="inspector-delete-btn"
+                  onClick={handleDeleteSelected}
+                  title="Delete this barrier wall"
                 >
-                  ⟳ Rotate
+                  🗑️ Delete
                 </button>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "tree" && (
+            <div className="inspector-content-row">
+              <span className="inspector-title">🌲 Individual Tree</span>
+              <div className="inspector-actions">
+                <span className="inspector-label">Species:</span>
+                <select
+                  className="inspector-select"
+                  value={selectedItem.speciesId || site.recommendedTreeId || "virginia_pine"}
+                  onChange={(e) => updateSelectedItem({ speciesId: e.target.value })}
+                  title="Change tree species"
+                >
+                  {Object.values(REGIONAL_TREE_SPECIES).map((sp) => {
+                    const suit = getTreeSuitability(sp.id, site.id);
+                    return (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.icon} {sp.name} ({sp.soundDropLabel} · {suit.badge})
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {(() => {
+                  const sp = REGIONAL_TREE_SPECIES[selectedItem.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+                  const suit = getTreeSuitability(sp.id, site.id);
+                  return (
+                    <span className={`suitability-pill ${suit.badgeClass}`} title={suit.reason}>
+                      {suit.badge}
+                    </span>
+                  );
+                })()}
+
+                <span className="inspector-label">Height:</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ height: Math.max(3, (selectedItem.height || 7) - 1) })}
+                  title="Decrease height"
+                >
+                  −
+                </button>
+                <span className="inspector-val">{selectedItem.height || 7}m</span>
+                <button
+                  className="inspector-step-btn"
+                  onClick={() => updateSelectedItem({ height: Math.min(14, (selectedItem.height || 7) + 1) })}
+                  title="Increase height"
+                >
+                  +
+                </button>
+
+                {(() => {
+                  const sp = REGIONAL_TREE_SPECIES[selectedItem.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+                  return (
+                    <div className="inspector-badge-row">
+                      <span className="inspector-stat-pill drop" title="Acoustic attenuation per tree row">
+                        📉 {sp.soundDropLabel}
+                      </span>
+                      <span className="inspector-stat-pill cost" title="Specimen planting cost">
+                        💰 ${sp.costPerTree}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <button
                   className="inspector-delete-btn"
                   onClick={handleDeleteSelected}
-                  title="Delete this barrier wall"
+                  title="Remove this tree"
                 >
                   🗑️ Delete
                 </button>
@@ -1767,14 +2170,19 @@ export default function AcousticSiteSandbox3D({
 
         <div className="dock-divider"></div>
 
-        <button className="dock-btn primary" onClick={handleOpenAddWallModal} title="Add a new sound barrier wall (choose wall type & acoustic rating)">
+        <button className="dock-btn primary" onClick={handleOpenAddWallModal} title="Add a new sound barrier wall (straight or curved, any angle)">
           <span className="dock-icon">🧱</span>
           <span className="dock-label">+ Add Wall</span>
         </button>
 
-        <button className="dock-btn primary" onClick={handleAddTrees} title="Plant a bio-acoustic tree screen">
+        <button className="dock-btn primary" onClick={handleOpenAddTreeModal} title="Plant individual bio-acoustic trees with site suitability rating">
           <span className="dock-icon">🌲</span>
-          <span className="dock-label">+ Plant Trees</span>
+          <span className="dock-label">+ Plant Tree</span>
+        </button>
+
+        <button className="dock-btn" onClick={handleAddTreeCluster} title="Plant a dense multi-row tree buffer band">
+          <span className="dock-icon">🌳</span>
+          <span className="dock-label">+ Tree Buffer</span>
         </button>
 
         {selectedItem && selectedItem.type !== "chiller" && selectedItem.type !== "probe" && (
@@ -1791,7 +2199,7 @@ export default function AcousticSiteSandbox3D({
           onClick={() => {
             setLayoutItems([
               { id: "chiller_compound", type: "chiller", x: 2, z: 0, placement: "side_exposed", silencers: false, rotation: 0 },
-              { id: "wall_1", type: "wall", x: -10, z: 0, height: 8, length: 32, rotation: 0, material: "absorptive_metal" },
+              { id: "wall_1", type: "wall", x: -10, z: 0, height: 8, length: 32, rotation: 0, shape: "straight", material: "absorptive_metal" },
               { id: "tree_1", type: "tree_cluster", x: -18, z: 0, depth: 18, speciesId: site.recommendedTreeId || "virginia_pine" },
               { id: "probe_1", type: "probe", x: -26, z: 0 },
             ]);
@@ -1831,7 +2239,7 @@ export default function AcousticSiteSandbox3D({
                 <div>
                   <h3 className="wall-picker-title">Select Acoustic Barrier Wall Type</h3>
                   <p className="wall-picker-subtitle">
-                    Select barrier material, sound drop rating, and thickness to automatically adjust site decibels and CAPEX
+                    Select barrier material, sound drop rating, shape (straight or curved arc), and orientation angle
                   </p>
                 </div>
               </div>
@@ -1901,12 +2309,73 @@ export default function AcousticSiteSandbox3D({
             {(() => {
               const activeMat = WALL_MATERIALS[selectedWallTypeToAdd] || WALL_MATERIALS.absorptive_metal;
               const area = newWallLength * newWallHeight;
-              const cost = Math.round(area * activeMat.costPerSqMeter);
+              const isCurved = newWallShape === "curved";
+              const cost = Math.round(area * activeMat.costPerSqMeter * (isCurved ? 1.15 : 1.0));
               const carbon = Math.round(area * activeMat.embodiedCarbonKgPerSqMeter);
 
               return (
                 <div className="wall-picker-footer-bar">
                   <div className="wall-config-controls">
+                    <label className="config-control-label">
+                      <span>Shape:</span>
+                      <div className="modal-shape-strip">
+                        <button
+                          type="button"
+                          className={`modal-chip-btn ${newWallShape === "straight" ? "active" : ""}`}
+                          onClick={() => setNewWallShape("straight")}
+                        >
+                          Straight
+                        </button>
+                        <button
+                          type="button"
+                          className={`modal-chip-btn ${newWallShape === "curved" ? "active" : ""}`}
+                          onClick={() => setNewWallShape("curved")}
+                          title="Curved arc wall (+2 dB wrap-around diffraction shielding)"
+                        >
+                          ⌒ Curved (+2dB)
+                        </button>
+                      </div>
+                    </label>
+
+                    <label className="config-control-label">
+                      <span>Angle:</span>
+                      <div className="modal-angle-input-box">
+                        <input
+                          type="number"
+                          min="0"
+                          max="360"
+                          value={newWallAngle}
+                          onChange={(e) => setNewWallAngle(Number(e.target.value) || 0)}
+                          className="modal-number-ctrl"
+                        />
+                        <span className="modal-unit">°</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="1"
+                          value={newWallAngle}
+                          onChange={(e) => setNewWallAngle(Number(e.target.value))}
+                          className="modal-range-ctrl"
+                        />
+                      </div>
+                    </label>
+
+                    {newWallShape === "curved" && (
+                      <label className="config-control-label">
+                        <span>Arc:</span>
+                        <select
+                          value={newWallCurveArc}
+                          onChange={(e) => setNewWallCurveArc(Number(e.target.value))}
+                          className="modal-select-ctrl"
+                        >
+                          <option value={45}>45° Gentle Curve</option>
+                          <option value={60}>60° Standard Arc</option>
+                          <option value={90}>90° Enclosing Horseshoe</option>
+                        </select>
+                      </label>
+                    )}
+
                     <label className="config-control-label">
                       <span>Height:</span>
                       <select
@@ -1941,7 +2410,9 @@ export default function AcousticSiteSandbox3D({
                   <div className="wall-live-preview-stats">
                     <div className="stat-pill">
                       <span>Sound Drop:</span>
-                      <strong className="text-emerald">📉 {activeMat.soundDropLabel}</strong>
+                      <strong className="text-emerald">
+                        📉 {activeMat.soundDropLabel} {isCurved ? "(+2dB Wrap)" : ""}
+                      </strong>
                     </div>
                     <div className="stat-pill">
                       <span>Estimated CAPEX:</span>
@@ -1957,8 +2428,163 @@ export default function AcousticSiteSandbox3D({
                     <button className="wall-modal-btn cancel" onClick={handleCloseAddWallModal}>
                       Cancel
                     </button>
-                    <button className="wall-modal-btn confirm" onClick={() => handleConfirmAddWall()}>
+                    <button
+                      className="wall-modal-btn confirm"
+                      onClick={() =>
+                        handleConfirmAddWall(
+                          selectedWallTypeToAdd,
+                          newWallHeight,
+                          newWallLength,
+                          newWallShape,
+                          newWallAngle,
+                          newWallCurveArc
+                        )
+                      }
+                    >
                       Add Wall to Site 🧱
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* 7. ADD BIO-ACOUSTIC TREE MODAL (INDIVIDUAL PLANTING WITH SITE SUITABILITY) */}
+      {isAddTreeModalOpen && (
+        <div className="report-modal-overlay animated-fadeIn" onClick={handleCloseAddTreeModal}>
+          <div
+            className="tree-picker-modal-dialog animated-popIn"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="wall-picker-header">
+              <div className="wall-picker-title-row">
+                <span className="wall-picker-icon">🌲</span>
+                <div>
+                  <h3 className="wall-picker-title">Plant Individual Bio-Acoustic Tree</h3>
+                  <p className="wall-picker-subtitle">
+                    Plant one tree at a time precisely where needed. Acoustic absorption and climate suitability are evaluated for <strong>{site.name}</strong>.
+                  </p>
+                </div>
+              </div>
+              <button className="wall-picker-close-btn" onClick={handleCloseAddTreeModal} title="Close">
+                ✕
+              </button>
+            </div>
+
+            {/* Site Climate Context Banner */}
+            <div className="tree-site-climate-banner">
+              <div className="climate-banner-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</div>
+              <div className="climate-banner-info">
+                <strong>Current Campus Environment: {site.name} ({site.region})</strong>
+                <p>
+                  Terrain: <em>{site.terrainType.replace("_", " ")}</em> · Municipal Noise Limit: <em>{site.municipalNoiseLimitDba} dBA</em>.
+                  Species adapted to this climate survive without costly irrigation and provide year-round acoustic canopy density.
+                </p>
+              </div>
+            </div>
+
+            {/* Tree Species Selection Grid */}
+            <div className="tree-picker-grid">
+              {Object.values(REGIONAL_TREE_SPECIES).map((sp) => {
+                const isSelected = selectedTreeSpeciesToAdd === sp.id;
+                const suit = getTreeSuitability(sp.id, site.id);
+                return (
+                  <div
+                    key={sp.id}
+                    className={`tree-card-option ${isSelected ? "selected" : ""}`}
+                    onClick={() => setSelectedTreeSpeciesToAdd(sp.id)}
+                  >
+                    <div className="tree-card-top">
+                      <span className="tree-card-icon">{sp.icon}</span>
+                      <div className="tree-card-headline">
+                        <h4 className="tree-card-name">{sp.name}</h4>
+                        <span className="tree-card-botanical">{sp.botanicalName}</span>
+                      </div>
+                      <span className={`tree-card-suitability-badge ${suit.badgeClass}`} style={{ borderColor: suit.color }}>
+                        {suit.badge}
+                      </span>
+                    </div>
+
+                    {/* Suitability Note / Alert */}
+                    <div className="tree-suitability-note-box" style={{ borderLeftColor: suit.color }}>
+                      <span className="suitability-note-icon">
+                        {suit.status === "optimal" ? "✨" : suit.status === "compatible" ? "🌱" : "⚠️"}
+                      </span>
+                      <span className="suitability-note-text">{suit.reason}</span>
+                    </div>
+
+                    <div className="tree-card-specs-row">
+                      <span className="spec-item">
+                        <strong>Sound Drop:</strong> <span className="spec-highlight">📉 {sp.soundDropLabel}</span>
+                      </span>
+                      <span className="spec-item">
+                        <strong>Water:</strong> {sp.waterUsageGalPerAcre.toLocaleString()} gal/ac/yr
+                      </span>
+                      <span className="spec-item">
+                        <strong>Specimen Cost:</strong> ${sp.costPerTree}
+                      </span>
+                      <span className="spec-item">
+                        <strong>Growth:</strong> {sp.growthRate}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tree Modal Footer */}
+            {(() => {
+              const activeTree = REGIONAL_TREE_SPECIES[selectedTreeSpeciesToAdd] || REGIONAL_TREE_SPECIES.virginia_pine;
+              const suit = getTreeSuitability(activeTree.id, site.id);
+
+              return (
+                <div className="tree-picker-footer-bar">
+                  <div className="tree-config-controls">
+                    <label className="config-control-label">
+                      <span>Tree Height:</span>
+                      <select
+                        value={newTreeHeight}
+                        onChange={(e) => setNewTreeHeight(Number(e.target.value))}
+                        className="modal-select-ctrl"
+                      >
+                        {[5, 6, 7, 8, 9, 10, 12].map((h) => (
+                          <option key={h} value={h}>
+                            {h} meters ({Math.round(h * 3.28)} ft mature canopy)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="tree-live-preview-stats">
+                    <div className="stat-pill">
+                      <span>Suitability:</span>
+                      <strong style={{ color: suit.color }}>{suit.badge}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>Acoustic Drop:</span>
+                      <strong className="text-emerald">📉 {activeTree.soundDropLabel}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>Planting Cost:</span>
+                      <strong className="text-sky">💰 ${activeTree.costPerTree}</strong>
+                    </div>
+                  </div>
+
+                  <div className="wall-modal-action-btns">
+                    <button className="wall-modal-btn cancel" onClick={handleCloseAddTreeModal}>
+                      Cancel
+                    </button>
+                    <button
+                      className="wall-modal-btn confirm"
+                      onClick={() => handleConfirmAddTree(selectedTreeSpeciesToAdd, newTreeHeight)}
+                    >
+                      Plant Tree on Site 🌲
                     </button>
                   </div>
                 </div>

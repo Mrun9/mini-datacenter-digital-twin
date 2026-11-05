@@ -8,79 +8,194 @@ export const REGIONAL_TREE_SPECIES = {
   virginia_pine: {
     id: "virginia_pine",
     name: "Eastern White & Virginia Pine",
+    shortName: "Virginia Pine",
     botanicalName: "Pinus strobus / Pinus virginiana",
     region: "Mid-Atlantic / Virginia",
+    icon: "🌲",
     foliageType: "Dense Needle Evergreen",
+    soundDropDbPerTree: 1.8,
+    soundDropLabel: "−1.8 dB / tree row (0.18 dB/m)",
     acousticAbsorptionCoeff: 0.18, // dB per meter of buffer depth
     annualWaterGallonsPerAcre: 15000, // Very low once established, rain-sustained
     annualMaintenanceCostPerMeter: 12, // $ / meter / year (minimal pruning, naturally pest-hardy)
+    costPerTree: 75,
     co2AbsorptionKgPerTreePerYear: 22,
     color: "#1e4620",
     trunkColor: "#3e2723",
     foliageShape: "conical",
     description: "Native evergreen conifer. Year-round acoustic scattering needles with zero irrigation required after year 1.",
+    idealSiteIds: ["loudoun_va"],
+    suitabilityNotes: {
+      loudoun_va: "🌟 Optimal Native Match: Native to Appalachian Piedmont; thrives in Virginia soil with zero irrigation after Year 1.",
+      phoenix_az: "⚠️ Severe Heat Stress: Pines suffer in extreme 115°F+ desert temperatures without excessive irrigation.",
+      columbia_river_or: "✓ Compatible: Tolerates Pacific Northwest cool seasons well.",
+      dublin_ie: "✓ Compatible: Moderate resilience in moist maritime conditions.",
+      council_bluffs_ia: "✓ Compatible: Winter-hardy against moderate Midwestern freezes.",
+    },
   },
   arizona_cypress: {
     id: "arizona_cypress",
     name: "Arizona Cypress & Velvet Mesquite",
+    shortName: "Arizona Cypress",
     botanicalName: "Cupressus arizonica / Prosopis velutina",
     region: "Arid Southwest / Arizona",
+    icon: "🌵",
     foliageType: "Xeriscape Dense Scale Evergreen",
+    soundDropDbPerTree: 1.4,
+    soundDropLabel: "−1.4 dB / tree row (0.14 dB/m)",
     acousticAbsorptionCoeff: 0.14,
     annualWaterGallonsPerAcre: 4500, // Extreme drought tolerance, drip xeriscape only
     annualMaintenanceCostPerMeter: 9, // Extremely low maintenance, heat-thriving
+    costPerTree: 65,
     co2AbsorptionKgPerTreePerYear: 16,
     color: "#2e5a44",
     trunkColor: "#4a3c31",
     foliageShape: "pyramidal",
     description: "Heat and drought resilient desert evergreen. Thrives in 115°F+ heat, minimal water footprint, dense acoustic barrier.",
+    idealSiteIds: ["phoenix_az"],
+    suitabilityNotes: {
+      phoenix_az: "🌟 Optimal Native Match: Extreme drought and 115°F+ heat tolerance; thrives on minimal drip xeriscape.",
+      loudoun_va: "⚠️ Humidity Warning: Prone to fungal needle blight in humid Mid-Atlantic summers.",
+      columbia_river_or: "⚠️ Waterlogged Root Risk: Dislikes heavy Pacific Northwest winter rain saturation.",
+      dublin_ie: "⚠️ Overcast & Damp Risk: Insufficient sun and too wet for desert cypress survival.",
+      council_bluffs_ia: "⚠️ Severe Freeze Risk: Vulnerable to intense sub-zero Midwestern blizzards.",
+    },
   },
   pacific_cedar: {
     id: "pacific_cedar",
     name: "Western Red Cedar & Douglas Fir",
+    shortName: "Western Red Cedar",
     botanicalName: "Thuja plicata / Pseudotsuga menziesii",
     region: "Pacific Northwest / Oregon",
+    icon: "🌲",
     foliageType: "Dense Interlocking Conifer",
+    soundDropDbPerTree: 2.2,
+    soundDropLabel: "−2.2 dB / tree row (0.22 dB/m)",
     acousticAbsorptionCoeff: 0.22,
     annualWaterGallonsPerAcre: 0, // 100% natural rainfall in PNW
     annualMaintenanceCostPerMeter: 14,
+    costPerTree: 95,
     co2AbsorptionKgPerTreePerYear: 32,
     color: "#16381e",
     trunkColor: "#2c1d11",
     foliageShape: "tall_conical",
     description: "High-density needle lattice with natural dampening resin. Rain-fed with massive biomass and acoustic dispersion.",
+    idealSiteIds: ["columbia_river_or"],
+    suitabilityNotes: {
+      columbia_river_or: "🌟 Optimal Native Match: Native Pacific Northwest giant; 100% rain-fed with dense acoustic needles.",
+      loudoun_va: "✓ High Performance: Thrives in cool, well-drained suburban soils.",
+      phoenix_az: "⚠️ Fatal Heat Scorch: Cannot survive dry desert heat; dies rapidly without immense water.",
+      dublin_ie: "✓ Excellent Match: Oceanic rains nourish dense interlocking needle growth.",
+      council_bluffs_ia: "✓ Compatible: Good winter hardiness with adequate soil moisture.",
+    },
   },
   irish_yew: {
     id: "irish_yew",
     name: "Irish Yew & Scots Pine",
+    shortName: "Irish Yew",
     botanicalName: "Taxus baccata / Pinus sylvestris",
     region: "Western Europe / Ireland",
+    icon: "🌿",
     foliageType: "Columnar Dense Needle Evergreen",
+    soundDropDbPerTree: 2.0,
+    soundDropLabel: "−2.0 dB / tree row (0.20 dB/m)",
     acousticAbsorptionCoeff: 0.20,
     annualWaterGallonsPerAcre: 0, // 100% oceanic rainfall
     annualMaintenanceCostPerMeter: 11,
+    costPerTree: 85,
     co2AbsorptionKgPerTreePerYear: 18,
     color: "#133826",
     trunkColor: "#3b2f2f",
     foliageShape: "columnar",
     description: "Extremely tight columnar growth. Damp-tolerant maritime foliage that creates thick acoustic hedging.",
+    idealSiteIds: ["dublin_ie"],
+    suitabilityNotes: {
+      dublin_ie: "🌟 Optimal Native Match: Maritime climate hyper-dense columnar needles; creates natural acoustic hedge.",
+      loudoun_va: "✓ Compatible: Excellent shade and suburban moisture tolerance.",
+      phoenix_az: "⚠️ Heat Damage: Requires continuous shade and moisture; scorched by direct desert sun.",
+      columbia_river_or: "✓ Compatible: Loves cool temperate oceanic rains.",
+      council_bluffs_ia: "✓ Compatible: Needs sheltered position against harsh prairie winds.",
+    },
   },
   hybrid_poplar: {
     id: "hybrid_poplar",
     name: "Hybrid Fast-Growth Sound Screen",
+    shortName: "Hybrid Poplar",
     botanicalName: "Populus deltoides x nigra",
     region: "Universal / Temperate",
+    icon: "🍃",
     foliageType: "Dense Broadleaf Flutter Screen",
+    soundDropDbPerTree: 1.6,
+    soundDropLabel: "−1.6 dB / tree row (0.16 dB/m)",
     acousticAbsorptionCoeff: 0.16,
     annualWaterGallonsPerAcre: 22000,
     annualMaintenanceCostPerMeter: 18,
+    costPerTree: 55,
     co2AbsorptionKgPerTreePerYear: 28,
     color: "#386629",
     trunkColor: "#4a4036",
     foliageShape: "oval",
     description: "Rapid 5ft/year vertical sound screen. Leaves flutter to scatter high-frequency fan whine into diffuse pink noise.",
+    idealSiteIds: ["council_bluffs_ia"],
+    suitabilityNotes: {
+      council_bluffs_ia: "🌟 Optimal Native Match: Rapid 5-8 ft/year growth; ideal agricultural prairie sound break.",
+      loudoun_va: "✓ Compatible: Rapid summer screen; deciduous winter leaf loss reduces winter barrier effect.",
+      phoenix_az: "⚠️ Extreme Water Penalty: Thirsty riparian species consuming 22,000 gal/acre in desert.",
+      columbia_river_or: "✓ Compatible: Common along river floodplains.",
+      dublin_ie: "✓ Compatible: Vigorous growth in moist soil.",
+    },
   },
 };
+
+/**
+ * Assesses regional climate suitability of a tree species for a given data center site.
+ * @param {string} speciesId
+ * @param {string} siteId
+ * @returns {{ status: "optimal" | "compatible" | "warning", badge: string, badgeClass: string, color: string, reason: string }}
+ */
+export function getTreeSuitability(speciesId, siteId) {
+  const species = REGIONAL_TREE_SPECIES[speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+  const specificNote = species.suitabilityNotes?.[siteId];
+  const isOptimal = siteId && species.idealSiteIds?.includes(siteId);
+
+  if (isOptimal) {
+    return {
+      status: "optimal",
+      badge: "🌟 Best for this Site",
+      badgeClass: "optimal",
+      color: "#10b981",
+      reason: specificNote || "Optimal native climate match with natural survival advantage and lowest water OPEX.",
+    };
+  }
+
+  if (siteId === "phoenix_az" && speciesId !== "arizona_cypress") {
+    return {
+      status: "warning",
+      badge: "⚠️ High Water & Heat Risk",
+      badgeClass: "warning",
+      color: "#f59e0b",
+      reason: specificNote || "High water demand and heat stress in arid desert environment.",
+    };
+  }
+
+  if (siteId === "dublin_ie" && speciesId === "arizona_cypress") {
+    return {
+      status: "warning",
+      badge: "⚠️ Excessive Moisture Risk",
+      badgeClass: "warning",
+      color: "#f59e0b",
+      reason: specificNote || "Too wet and overcast for arid desert cypress.",
+    };
+  }
+
+  return {
+    status: "compatible",
+    badge: "✓ Compatible",
+    badgeClass: "compatible",
+    color: "#38bdf8",
+    reason: specificNote || "Viable species with standard regional maintenance.",
+  };
+}
 
 export const CHILLER_PLACEMENTS = {
   rear_shielded: {

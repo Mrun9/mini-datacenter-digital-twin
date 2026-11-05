@@ -46,14 +46,16 @@ export function calculateChillerSoundPower(itPowerKw = 500, ambientTempC = 22, f
  * @param {number} sourceDistanceM - Distance from chiller to wall (meters)
  * @param {number} receiverDistanceM - Distance from wall to residential receptor (meters)
  * @param {boolean} wallEnabled - Whether the wall is active
- * @returns {{ attenuationDb: number, costEstimate: number, embodiedCarbonKg: number }}
+ * @param {"straight" | "curved"} wallShape - Profile of barrier wall (straight or curved arc)
+ * @returns {{ attenuationDb: number, costEstimate: number, embodiedCarbonKg: number, material: Object }}
  */
 export function calculateWallAttenuation(
   wallHeightMeters = 8,
   materialId = "absorptive_metal",
   sourceDistanceM = 15,
   receiverDistanceM = 300,
-  wallEnabled = true
+  wallEnabled = true,
+  wallShape = "straight"
 ) {
   if (!wallEnabled || wallHeightMeters <= 0) {
     return { attenuationDb: 0, costEstimate: 0, embodiedCarbonKg: 0 };
@@ -119,13 +121,19 @@ export function calculateWallAttenuation(
 
   // Height scaling: higher walls intercept more diffraction path
   const heightMultiplier = Math.pow(effectiveWallHeight / 8.0, 0.45);
-  const calculatedAttenuation = (rawBarrierLoss + materialOffset) * heightMultiplier;
+
+  // Curved Wall wrap-around shielding bonus (+2.0 dB lateral containment):
+  // Curving the barrier around the chiller yard limits end-diffraction flanking
+  const curvatureBonus = wallShape === "curved" ? 2.0 : 0.0;
+
+  const calculatedAttenuation = (rawBarrierLoss + materialOffset) * heightMultiplier + curvatureBonus;
   const finalAttenuation = Math.max(3.0, Math.min(material.transmissionLossDb || 38, calculatedAttenuation));
 
   // Perimeter length around typical chiller yard: ~90 meters
   const wallPerimeterMeters = 90;
   const wallAreaSqMeters = wallPerimeterMeters * wallHeightMeters;
-  const costEstimate = wallAreaSqMeters * material.costPerSqMeter;
+  const costMultiplier = wallShape === "curved" ? 1.15 : 1.0; // ~15% curved fabrication premium
+  const costEstimate = wallAreaSqMeters * material.costPerSqMeter * costMultiplier;
   const embodiedCarbonKg = wallAreaSqMeters * material.embodiedCarbonKgPerSqMeter;
 
   return {
@@ -133,59 +141,79 @@ export function calculateWallAttenuation(
     costEstimate: Math.round(costEstimate),
     embodiedCarbonKg: Math.round(embodiedCarbonKg),
     material,
+    wallShape,
   };
 }
 
 /**
- * Calculates bio-acoustic attenuation provided by a native vegetation buffer zone.
+ * Calculates bio-acoustic attenuation provided by native vegetation.
  * Based on ISO 9613-2 foliage scattering + porous soil ground effect.
+ * Supports both continuous buffer belts and individual planted trees.
  *
  * @param {number} bufferDepthMeters - Depth of the planted tree buffer in meters (0 - 80m)
  * @param {string} treeSpeciesId - Tree key from REGIONAL_TREE_SPECIES
  * @param {boolean} treeEnabled - Whether the tree buffer is active
- * @returns {{ attenuationDb: number, annualMaintenanceCost: number, annualWaterGallons: number, annualCo2Kg: number }}
+ * @param {number} singleTreeCount - Number of individually placed trees
+ * @returns {{ attenuationDb: number, annualMaintenanceCost: number, annualWaterGallons: number, annualCo2Kg: number, singleTreeCount: number }}
  */
 export function calculateVegetationAttenuation(
   bufferDepthMeters = 25,
   treeSpeciesId = "virginia_pine",
-  treeEnabled = true
+  treeEnabled = true,
+  singleTreeCount = 0
 ) {
-  if (!treeEnabled || bufferDepthMeters <= 0) {
+  const species = REGIONAL_TREE_SPECIES[treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
+
+  // Single tree equivalent depth contribution (each single tree ~3.5m effective screening)
+  const singleTreeEquivalentDepth = singleTreeCount > 0
+    ? singleTreeCount * (species.acousticAbsorptionCoeff / 0.18) * 3.5
+    : 0;
+
+  const effectiveTotalDepth = Math.max(0, bufferDepthMeters + singleTreeEquivalentDepth);
+
+  if (!treeEnabled || effectiveTotalDepth <= 0) {
     return {
       attenuationDb: 0,
       annualMaintenanceCost: 0,
       annualWaterGallons: 0,
       annualCo2Kg: 0,
+      singleTreeCount: 0,
     };
   }
 
-  const species = REGIONAL_TREE_SPECIES[treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
-
   // Foliage scattering increases with depth, but saturates asymptotically
   // ISO 9613-2 limits foliage attenuation to ~10 - 12 dB because sound creeps over treetops
-  const rawAttenuation = species.acousticAbsorptionCoeff * bufferDepthMeters;
+  const rawAttenuation = species.acousticAbsorptionCoeff * effectiveTotalDepth;
   const saturatedAttenuation = 12 * (1 - Math.exp(-rawAttenuation / 10));
 
   // Ground effect bonus: Tree roots, humus, and leaf litter convert hard acoustic ground
   // into an acoustic porous sponge (eliminating ground bounce reflection)
-  const porousGroundBonus = bufferDepthMeters >= 10 ? 2.5 : (bufferDepthMeters / 10) * 2.5;
+  const porousGroundBonus = effectiveTotalDepth >= 10 ? 2.5 : (effectiveTotalDepth / 10) * 2.5;
 
   const totalAttenuation = Math.min(14.0, saturatedAttenuation + porousGroundBonus);
 
-  // Environmental & Cost metrics across an 80m wide parcel buffer
+  // Environmental & Cost metrics
   const bufferWidthMeters = 80;
-  const bufferAreaSqMeters = bufferWidthMeters * bufferDepthMeters;
-  const estimatedTreeCount = Math.round(bufferAreaSqMeters / 9); // ~1 tree per 9m² (3m spacing)
+  const bufferAreaSqMeters = bufferWidthMeters * (bufferDepthMeters || 0);
+  const clusterTreeCount = Math.round(bufferAreaSqMeters / 9);
+  const totalTreeCount = clusterTreeCount + singleTreeCount;
 
-  const annualMaintenanceCost = bufferDepthMeters * species.annualMaintenanceCostPerMeter;
-  const annualWaterGallons = Math.round((bufferAreaSqMeters / 4046) * species.annualWaterGallonsPerAcre);
-  const annualCo2Kg = estimatedTreeCount * species.co2AbsorptionKgPerTreePerYear;
+  const clusterMaintenance = (bufferDepthMeters || 0) * species.annualMaintenanceCostPerMeter;
+  const singleTreeMaintenance = singleTreeCount * (species.costPerTree ? Math.round(species.costPerTree * 0.12) : 9);
+  const annualMaintenanceCost = clusterMaintenance + singleTreeMaintenance;
+
+  const annualWaterGallons = Math.round(
+    ((bufferAreaSqMeters + singleTreeCount * 9) / 4046) * species.annualWaterGallonsPerAcre
+  );
+  const annualCo2Kg = totalTreeCount * species.co2AbsorptionKgPerTreePerYear;
 
   return {
     attenuationDb: Math.round(totalAttenuation * 10) / 10,
     annualMaintenanceCost: Math.round(annualMaintenanceCost),
     annualWaterGallons,
     annualCo2Kg: Math.round(annualCo2Kg),
+    singleTreeCount,
+    species,
   };
 }
 
@@ -258,10 +286,12 @@ export function evaluateSiteAcoustics({
   wallMaterial = "absorptive_metal",
   wallEnabled = true,
   wallEnclosure = "single_east", // "single_east" | "u_shape" | "full_4side"
+  wallShape = "straight", // "straight" | "curved"
   treeBufferDepthMeters = 25,
   treeSpeciesId = "virginia_pine",
   treeEnabled = true,
   treeArrangement = "east_buffer", // "east_buffer" | "perimeter_ring"
+  singleTreeCount = 0,
   chillerOrientationAngle = 90, // Degrees away from residential zone (0 - 180)
   acousticSilencers = false, // High-performance compressor sound blankets & intake silencers
 }) {
@@ -288,8 +318,8 @@ export function evaluateSiteAcoustics({
 
   // 4. Mitigations
   const placementData = calculatePlacementAttenuation(chillerPlacement);
-  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, effectiveDistance, wallEnabled);
-  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, effectiveDistance, wallEnabled, wallShape);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled, singleTreeCount);
 
   // Enclosure bonus: U-shape or 4-sided enclosure traps sound
   let enclosureBonus = 0;
@@ -419,9 +449,11 @@ export function calculateNoiseAtPoint({
   wallMaterial = "absorptive_metal",
   wallEnabled = true,
   wallEnclosure = "single_east",
+  wallShape = "straight",
   treeBufferDepthMeters = 25,
   treeSpeciesId = "virginia_pine",
   treeEnabled = true,
+  singleTreeCount = 0,
   chillerOrientationAngle = 90,
   municipalNoiseLimitDba = 45,
   timeOfDay = "night",
@@ -437,8 +469,8 @@ export function calculateNoiseAtPoint({
 
   // Evaluate mitigations
   const placementData = calculatePlacementAttenuation(chillerPlacement);
-  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, d, wallEnabled);
-  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled);
+  const wallData = calculateWallAttenuation(wallHeightMeters, wallMaterial, 15, d, wallEnabled, wallShape);
+  const treeData = calculateVegetationAttenuation(treeBufferDepthMeters, treeSpeciesId, treeEnabled, singleTreeCount);
   const directivityAttenuation = (chillerOrientationAngle / 180) * 4.5;
 
   let enclosureBonus = 0;

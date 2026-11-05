@@ -9,7 +9,7 @@ import {
   calculateNoiseAtPoint,
   calculateIsophoneRadii,
 } from "../src/simulation/acoustics.js";
-import { DATA_CENTER_SITES, WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../src/simulation/datacenterSites.js";
+import { DATA_CENTER_SITES, WALL_MATERIALS, REGIONAL_TREE_SPECIES, getTreeSuitability } from "../src/simulation/datacenterSites.js";
 
 test("chiller sound power increases with ambient temperature and fan duty", () => {
   const coolLw = calculateChillerSoundPower(500, 20, 60);
@@ -220,4 +220,86 @@ test("LSARS wall types attenuate and adjust cost according to material specifica
   assert.ok(masonry.costEstimate > perfMetal.costEstimate, "Masonry CAPEX > Perforated metal CAPEX");
   assert.ok(perfMetal.costEstimate > concrete4.costEstimate, "Perforated metal CAPEX > Precast concrete CAPEX");
 });
+
+test("curved barrier wall provides wrap-around diffraction shielding bonus (+2dB)", () => {
+  const straight = calculateWallAttenuation(8, "absorptive_metal", 15, 300, true, "straight");
+  const curved = calculateWallAttenuation(8, "absorptive_metal", 15, 300, true, "curved");
+
+  assert.ok(curved.attenuationDb > straight.attenuationDb, "Curved wall attenuates more sound than straight wall");
+  assert.equal(
+    Math.round((curved.attenuationDb - straight.attenuationDb) * 10) / 10,
+    2.0,
+    "Curved barrier provides calibrated +2.0 dB flanking diffraction shield bonus"
+  );
+  assert.ok(curved.costEstimate > straight.costEstimate, "Curved wall has curved-panel fabrication cost multiplier (1.15x)");
+});
+
+test("individual tree planting reduces noise according to calibrated species decibels", () => {
+  // Test planting 1 single tree vs 5 single trees
+  const oneTree = calculateVegetationAttenuation(0, "pacific_cedar", true, 1);
+  const fiveTrees = calculateVegetationAttenuation(0, "pacific_cedar", true, 5);
+
+  assert.ok(oneTree.attenuationDb > 0, "A single tree contributes measurable sound dampening");
+  assert.ok(fiveTrees.attenuationDb > oneTree.attenuationDb, "5 trees attenuate more sound than 1 tree");
+  assert.equal(oneTree.singleTreeCount, 1);
+  assert.equal(fiveTrees.singleTreeCount, 5);
+
+  // Compare single tree sound drop between species: Pacific Cedar / Douglas Fir (0.22 coeff) vs Arizona Cypress (0.14 coeff)
+  const cedarSingle = calculateVegetationAttenuation(0, "pacific_cedar", true, 3);
+  const cypressSingle = calculateVegetationAttenuation(0, "arizona_cypress", true, 3);
+  assert.ok(
+    cedarSingle.attenuationDb > cypressSingle.attenuationDb,
+    "Dense needle Pacific Cedar / Douglas Fir absorbs and scatters more sound than arid Arizona Cypress"
+  );
+});
+
+test("location suitability accurately evaluates tree survival and climate compatibility across sites", () => {
+  // Loudoun VA: Virginia Pine is optimal native match
+  const vaPineInVA = getTreeSuitability("virginia_pine", "loudoun_va");
+  assert.equal(vaPineInVA.status, "optimal");
+  assert.ok(vaPineInVA.badge.includes("Best") || vaPineInVA.badge.includes("Optimal"));
+
+  // Phoenix AZ: Arizona Cypress is optimal; Pacific Cedar is a climate risk
+  const cypressInPhx = getTreeSuitability("arizona_cypress", "phoenix_az");
+  assert.equal(cypressInPhx.status, "optimal");
+
+  const cedarInPhx = getTreeSuitability("pacific_cedar", "phoenix_az");
+  assert.equal(cedarInPhx.status, "warning");
+  assert.ok(cedarInPhx.badge.includes("Risk") || cedarInPhx.badge.includes("Caution"));
+  assert.ok(cedarInPhx.reason.toLowerCase().includes("heat") || cedarInPhx.reason.toLowerCase().includes("water") || cedarInPhx.reason.toLowerCase().includes("scorch"));
+
+  // Dublin IE: Irish Yew is optimal; Arizona Cypress faces fungal blight from moisture
+  const yewInDublin = getTreeSuitability("irish_yew", "dublin_ie");
+  assert.equal(yewInDublin.status, "optimal");
+
+  const cypressInDublin = getTreeSuitability("arizona_cypress", "dublin_ie");
+  assert.equal(cypressInDublin.status, "warning");
+  assert.ok(cypressInDublin.reason.toLowerCase().includes("wet") || cypressInDublin.reason.toLowerCase().includes("damp") || cypressInDublin.reason.toLowerCase().includes("fungal"));
+
+  // Columbia River OR: Pacific Cedar (Western Red Cedar & Douglas Fir) is optimal
+  const cedarInOR = getTreeSuitability("pacific_cedar", "columbia_river_or");
+  assert.equal(cedarInOR.status, "optimal");
+});
+
+test("arbitrary wall rotation angle (e.g. 56 degrees) evaluates correctly without error", () => {
+  const result56 = evaluateSiteAcoustics({
+    itPowerKw: 600,
+    ambientTempC: 25,
+    distanceToHomesMeters: 250,
+    municipalNoiseLimitDba: 45,
+    wallHeightMeters: 8,
+    wallMaterial: "absorptive_metal",
+    wallEnabled: true,
+    wallShape: "curved",
+    singleTreeCount: 3,
+    treeSpeciesId: "virginia_pine",
+    treeEnabled: true,
+    chillerOrientationAngle: 56, // Arbitrary angle like 56°
+  });
+
+  assert.ok(Number.isFinite(result56.netReceivedLp));
+  assert.ok(result56.breakdown.wallAttenuation > 0);
+  assert.ok(result56.breakdown.treeAttenuation > 0);
+});
+
 
