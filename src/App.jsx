@@ -190,7 +190,7 @@ export default function App() {
                   className={`clean-pill-btn ${showReport ? "active" : ""}`}
                   onClick={() => setShowReport(!showReport)}
                 >
-                  📊 {showReport ? "Hide Link Budget" : "ISO 9613-2 Budget"}
+                  📊 ISO 9613-2 Budget
                 </button>
               </div>
             </div>
@@ -220,19 +220,17 @@ export default function App() {
               )}
             </div>
 
-            {/* Collapsible Executive Acoustic Engineering Report (Lighter Whitepaper Background) */}
+            {/* Modal Popup: Executive Acoustic Engineering Report (Lighter Whitepaper Background) */}
             {showReport && (
-              <div className="report-drawer-outer-wrap animated-fadeIn">
-                <AcousticEngineeringReport
-                  site={activeSite}
-                  config={activeConfig}
-                  results={acousticResults}
-                  fanSpeedPercent={fanSpeedPercent}
-                  itPowerKw={itPowerKw}
-                  timeOfDay={timeOfDay}
-                  onClose={() => setShowReport(false)}
-                />
-              </div>
+              <AcousticEngineeringReport
+                site={activeSite}
+                config={activeConfig}
+                results={acousticResults}
+                fanSpeedPercent={fanSpeedPercent}
+                itPowerKw={itPowerKw}
+                timeOfDay={timeOfDay}
+                onClose={() => setShowReport(false)}
+              />
             )}
           </section>
         )}
