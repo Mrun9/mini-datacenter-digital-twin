@@ -42,6 +42,7 @@ export default function App() {
   });
   const [fanSpeedPercent, setFanSpeedPercent] = useState(75);
 
+  const [showReport, setShowReport] = useState(false);
   const activeSite = useMemo(
     () => DATA_CENTER_SITES.find((s) => s.id === selectedSiteId) || DATA_CENTER_SITES[0],
     [selectedSiteId]
@@ -147,112 +148,95 @@ export default function App() {
         {/* VIEW 1: SELECTED SITE 3D TWIN & ACOUSTIC SANDBOX */}
         {tab === "site" && (
           <section className="site-tab-view animated-fadeIn">
-            {/* Quick Site Switcher Pills */}
-            <div className="site-quick-switcher-bar">
-              <span className="quick-bar-label">SELECT FACILITY:</span>
-              <div className="quick-pills-list">
-                {DATA_CENTER_SITES.map((site) => {
-                  const isCurrent = site.id === selectedSiteId;
-                  const flag = site.country === "Ireland" ? "🇮🇪" : "🇺🇸";
-                  return (
-                    <button
-                      key={site.id}
-                      className={`quick-pill-btn ${isCurrent ? "active" : ""}`}
-                      onClick={() => setSelectedSiteId(site.id)}
-                    >
-                      <span className="pill-flag">{flag}</span>
-                      <span className="pill-name">{site.name}</span>
-                      <span className="pill-terrain">{site.terrainLabel}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Site Title Banner & Quick Metadata */}
-            <div className="site-view-header">
-              <div className="site-title-column">
-                <div className="site-eyebrow-row">
-                  <span className="eyebrow">SPATIAL DIGITAL TWIN · 3D FACILITY GROUNDING</span>
-                  <span
-                    className="site-status-pill animate-pulse-badge"
-                    style={{
-                      background: `${acousticResults.statusColor}22`,
-                      color: acousticResults.statusColor,
-                      borderColor: `${acousticResults.statusColor}66`,
-                    }}
-                  >
-                    ● {acousticResults.complianceStatus} ({acousticResults.netReceivedLp.toFixed(1)} dBA at {activeSite.defaultDistanceToHomesMeters}m)
-                  </span>
-                </div>
+            {/* Minimalist Top Facility & Viewport Bar */}
+            <div className="site-view-header-clean">
+              <div className="clean-facility-info">
                 <h2>
-                  {activeSite.name} <span className="sub-facility">— {activeSite.realFacilityName || "Hyperscale Campus"}</span>
+                  <span className="site-flag-inline">{activeSite.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
+                  {activeSite.name}
+                  <span className="clean-sub-facility">({activeSite.realFacilityName || "Hyperscale Campus"})</span>
                 </h2>
-                <p className="site-address-sub">
-                  📍 {activeSite.realAddress || activeSite.coordinates} · Terrain: <strong>{activeSite.terrainLabel}</strong> · Ambient: <strong>{activeSite.ambientTempC}°C</strong>
-                </p>
+                <div className="clean-facility-meta">
+                  <span>📍 {activeSite.realAddress || activeSite.coordinates}</span>
+                  <span>·</span>
+                  <span>Terrain: <strong>{activeSite.terrainLabel}</strong></span>
+                  <span>·</span>
+                  <span>Homes: <strong>{activeSite.defaultDistanceToHomesMeters}m away</strong></span>
+                </div>
               </div>
 
-              {/* Viewport Mode Switcher (3D Twin, Google Maps Satellite, Split View) */}
-              <div className="viewport-mode-switcher">
+              {/* View Mode Switcher: 3D Twin Sandbox vs Real Satellite Map */}
+              <div className="clean-viewport-pills">
                 <button
-                  className={viewportMode === "twin" ? "active" : ""}
+                  className={`clean-pill-btn ${viewportMode === "twin" ? "active" : ""}`}
                   onClick={() => setViewportMode("twin")}
                 >
-                  🧊 3D Twin Sandbox
+                  🧊 3D Interactive Twin
                 </button>
                 <button
-                  className={viewportMode === "satellite" ? "active" : ""}
+                  className={`clean-pill-btn ${viewportMode === "satellite" ? "active" : ""}`}
                   onClick={() => setViewportMode("satellite")}
                 >
-                  🛰️ Google Maps Satellite
+                  🛰️ Satellite Imagery
                 </button>
                 <button
-                  className={viewportMode === "split" ? "active" : ""}
-                  onClick={() => setViewportMode("split")}
+                  className={`clean-pill-btn ${showReport ? "active" : ""}`}
+                  onClick={() => setShowReport(!showReport)}
                 >
-                  ⚡ Split View (3D + Maps)
+                  📊 {showReport ? "Hide Link Budget" : "ISO 9613-2 Budget"}
                 </button>
               </div>
             </div>
 
             {/* Viewport Display: 3D Canvas and/or Satellite Map */}
-            <div className={`viewport-display ${viewportMode === "split" ? "split-mode" : ""}`}>
-              {(viewportMode === "twin" || viewportMode === "split") && (
+            <div className="viewport-display single-frame">
+              {viewportMode === "twin" && (
                 <div className="canvas-wrapper">
                   <Suspense fallback={<div className="loading-canvas">Initializing 3D Spatial Acoustic Scene...</div>}>
                     <AcousticSiteSandbox3D
                       site={activeSite}
-                      config={activeConfig}
-                      acousticResults={acousticResults}
                       running={running}
                       itPowerKw={itPowerKw}
                       fanSpeedPercent={fanSpeedPercent}
                       timeOfDay={timeOfDay}
                       onChangeTimeOfDay={setTimeOfDay}
+                      onOpenReport={() => setShowReport(true)}
                     />
                   </Suspense>
                 </div>
               )}
 
-              {(viewportMode === "satellite" || viewportMode === "split") && (
+              {viewportMode === "satellite" && (
                 <div className="satellite-wrapper">
                   <SatelliteArchitectureInspector site={activeSite} />
                 </div>
               )}
             </div>
 
-            {/* Engineering Acoustic Controls Panel */}
-            <AcousticControls
-              site={activeSite}
-              config={activeConfig}
-              onChangeConfig={handleUpdateConfig}
-              results={acousticResults}
-              fanSpeedPercent={fanSpeedPercent}
-              onChangeFanSpeed={setFanSpeedPercent}
-              timeOfDay={timeOfDay}
-              onChangeTimeOfDay={setTimeOfDay}
-            />
+            {/* Optional Collapsible Engineering Acoustic Controls & Link Budget Drawer */}
+            {showReport && (
+              <div className="pro-report-drawer animated-fadeIn">
+                <div className="pro-report-drawer-header">
+                  <div>
+                    <h3>🔬 Full Acoustic Engineering Link Budget (ISO 9613-2)</h3>
+                    <p>Octave-band transmission loss, Maekawa diffraction, and thermodynamic heat rejection</p>
+                  </div>
+                  <button className="close-report-btn" onClick={() => setShowReport(false)}>
+                    ✕ Close Report
+                  </button>
+                </div>
+                <AcousticControls
+                  site={activeSite}
+                  config={activeConfig}
+                  onChangeConfig={handleUpdateConfig}
+                  results={acousticResults}
+                  fanSpeedPercent={fanSpeedPercent}
+                  onChangeFanSpeed={setFanSpeedPercent}
+                  timeOfDay={timeOfDay}
+                  onChangeTimeOfDay={setTimeOfDay}
+                />
+              </div>
+            )}
           </section>
         )}
 
