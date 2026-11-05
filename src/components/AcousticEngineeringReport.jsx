@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES, CHILLER_PLACEMENTS } from "../simulation/datacenterSites.js";
 
-/**
- * Standard Octave Band Acoustic Calculations
- */
 const OCTAVE_BANDS = [
   { freq: 63, label: "63 Hz", aWeight: -26.2, cWeight: -0.8, airAbsPer100m: 0.05, sourceRel: -3 },
-  { freq: 125, label: "125 Hz", aWeight: -16.1, cWeight: -0.2, airAbsPer100m: 0.15, sourceRel: 2 }, // Peak compressor hum
+  { freq: 125, label: "125 Hz", aWeight: -16.1, cWeight: -0.2, airAbsPer100m: 0.15, sourceRel: 2 },
   { freq: 250, label: "250 Hz", aWeight: -8.6, cWeight: 0.0, airAbsPer100m: 0.35, sourceRel: 0 },
   { freq: 500, label: "500 Hz", aWeight: -3.2, cWeight: 0.0, airAbsPer100m: 0.70, sourceRel: -2 },
   { freq: 1000, label: "1 kHz", aWeight: 0.0, cWeight: 0.0, airAbsPer100m: 1.50, sourceRel: -4 },
@@ -24,10 +21,9 @@ export default function AcousticEngineeringReport({
   timeOfDay = "night",
   onClose,
 }) {
-  const [activeReportTab, setActiveReportTab] = useState("all"); // "all" | "formulas" | "waterfall" | "economics" | "octave"
+  const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard" | "formulas" | "octave" | "thermo"
   const [copied, setCopied] = useState(false);
 
-  // Safe defaults in case any prop is temporarily undefined
   const site = propSite || {
     name: "Loudoun County, VA",
     city: "Ashburn",
@@ -72,12 +68,11 @@ export default function AcousticEngineeringReport({
   const currentTree = REGIONAL_TREE_SPECIES[config.treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
   const currentPlacement = CHILLER_PLACEMENTS[config.placement] || CHILLER_PLACEMENTS.side_exposed;
 
-  // Distance parameters
   const distanceM = site.defaultDistanceToHomesMeters || 320;
   const wallDistSourceM = 15;
   const wallDistRecM = Math.max(10, distanceM - wallDistSourceM);
 
-  // Fresnel number live calculation
+  // Fresnel number calculation
   const sourceHeight = 3.5;
   const earHeight = 1.8;
   const effWallHeight = config.wallEnabled ? (config.wallHeightMeters || 8) : 0;
@@ -88,10 +83,10 @@ export default function AcousticEngineeringReport({
     ? Math.hypot(wallDistSourceM, h1) + Math.hypot(wallDistRecM, h2)
     : directDist;
   const deltaPath = Math.max(0, diffPath - directDist);
-  const lambda = 2.86; // 120 Hz compressor tone wavelength
+  const lambda = 2.86;
   const fresnelN = (2 * deltaPath) / lambda;
 
-  // Cost and Risk Calculations
+  // Expenditures & Ecology
   const wallPerimeter = config.wallEnclosure === "full_4side" ? 180 : config.wallEnclosure === "u_shape" ? 135 : 90;
   const wallArea = config.wallEnabled ? wallPerimeter * (config.wallHeightMeters || 8) : 0;
   const wallCost = Math.round(wallArea * (currentWall?.costPerSqMeter || 145));
@@ -105,13 +100,10 @@ export default function AcousticEngineeringReport({
   const treeWaterGal = Math.round((treeAreaSqM / 4046) * (currentTree?.annualWaterGallonsPerAcre || 15000) * (config.treeArrangement === "perimeter_ring" ? 2.2 : 1.0));
   const treeCo2Seq = Math.round(treeCount * (currentTree?.co2AbsorptionKgPerTreePerYear || 22) * (config.treeArrangement === "perimeter_ring" ? 2.2 : 1.0));
 
-  // Risk Avoidance Economics
-  const municipalDailyFine = 25000; // $25k/day statutory noise moratorium fine
+  const municipalDailyFine = 25000;
   const annualAvoidedFines = results.isCompliant ? municipalDailyFine * 365 : 0;
-  const litigationReserveSaved = 1500000; // $1.5M class action community settlement reserve
-  const totalCapexInvested = wallCost + (config.placement === "underground" ? 450000 : config.placement === "semi_berm" ? 120000 : 0);
 
-  // Octave band table generation
+  // Octave band table
   const octaveData = OCTAVE_BANDS.map((band) => {
     const bandSourceLw = Math.round(((results.sourceLw || 108.0) + band.sourceRel) * 10) / 10;
     const geomLoss = Math.round((20 * Math.log10(distanceM) + 11) * 10) / 10;
@@ -142,57 +134,29 @@ export default function AcousticEngineeringReport({
     };
   });
 
+  // Print & Copy
+  const handlePrint = () => window.print();
+
   const handleCopySummary = () => {
-    const text = `
-========================================================================
-HUSHGRID™ ISO 9613-2 ACOUSTIC AUDIT & MITIGATION REPORT
-Site: ${currentSite.name}
-Verified Receptor Distance: ${distanceM}m | Nighttime Limit: ${currentSite.municipalNoiseLimitDba || 45} dBA
-========================================================================
-EXECUTIVE SUMMARY:
-- Source Sound Power (Lw): ${currentResults.sourceLw} dBA (at ${fanSpeedPercent}% fan speed, ${itPowerKw} kW IT Load)
-- Unmitigated Level at Receptor: ${currentResults.unmitigatedLp} dBA
-- Total Mitigation Attenuation: -${currentResults.breakdown?.totalMitigationDb} dB
-- Net Received Sound Level: ${currentResults.netReceivedLp?.toFixed(1)} dBA (${currentResults.netReceivedLpC?.toFixed(1)} dBC)
-- Compliance Status: ${currentResults.complianceStatus?.toUpperCase()} (Margin: ${currentResults.marginDb >= 0 ? "+" : ""}${currentResults.marginDb?.toFixed(1)} dB)
-
-GOVERNING PHYSICS & FORMULAS:
-- Distance Decay: A_div = 20*log10(${distanceM}) + 11 = ${currentResults.breakdown?.geometricDecay} dB
-- Maekawa Barrier Loss: A_bar = 10*log10(3 + 20*${fresnelN.toFixed(3)}) + NRC_bonus = ${currentResults.breakdown?.wallAttenuation} dB
-- Bio-Vegetation Loss: A_veg = 12*(1 - exp(-a*d/10)) = ${currentResults.breakdown?.treeAttenuation} dB
-
-FINANCIAL ROI & CARBON IMPACT:
-- Acoustic Wall CAPEX: $${wallCost.toLocaleString()} (${wallArea} m² of ${currentWall?.name})
-- Tree Buffer Annual OPEX: $${treeMaintCost.toLocaleString()}/yr
-- Embodied Carbon: ${wallCarbon.toLocaleString()} kg CO₂
-- Annual CO₂ Sequestered: ${treeCo2Seq.toLocaleString()} kg/yr
-- Statutory Fines Avoided: $${(annualAvoidedFines / 1000000).toFixed(2)}M/year ($25,000/day)
-========================================================================
-Report Generated by HushGrid Spatial Digital Twin Platform
-`.trim();
-
+    const text = `HushGrid ISO 9613-2 Audit: ${site.name}
+Distance: ${distanceM}m | Night Limit: ${site.municipalNoiseLimitDba} dBA
+Net Received: ${results.netReceivedLp?.toFixed(1)} dBA (${results.isCompliant ? "COMPLIANT" : "VIOLATION"})
+Total Attenuation: -${results.breakdown?.totalMitigationDb} dB (Wall: -${results.breakdown?.wallAttenuation}dB, Trees: -${results.breakdown?.treeAttenuation}dB)
+Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintCost.toLocaleString()}/yr | Fines Avoided $${(annualAvoidedFines / 1000000).toFixed(2)}M/yr`;
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     });
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Close modal on Escape key
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && onClose) {
-        onClose();
-      }
+      if (e.key === "Escape" && onClose) onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // Lock body scroll while modal popup is open
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -203,726 +167,442 @@ Report Generated by HushGrid Spatial Digital Twin Platform
 
   return (
     <div className="report-modal-overlay animated-fadeIn" onClick={onClose} role="dialog" aria-modal="true">
-      <div
-        className="report-modal-dialog animated-pop"
-        onClick={(e) => e.stopPropagation()}
-        tabIndex="-1"
-      >
-        <div className="light-report-container">
-      {/* 1. Executive Top Header Bar */}
-      <header className="report-header-banner">
-        <div className="report-header-left">
-          <div className="report-badge-row">
-            <span className="report-type-badge">CERTIFIED ENGINEERING REPORT</span>
-            <span className="report-std-badge">ISO 9613-2 / ASHRAE TC 9.9</span>
-            <span className={`report-status-badge ${results.isCompliant ? "status-pass" : "status-fail"}`}>
-              {results.isCompliant ? "✓ ZONING COMPLIANT" : "⚠️ VIOLATION DETECTED"}
-            </span>
-          </div>
-          <h2 className="report-main-title">
-            Environmental AeroAcoustic Propagation & Mitigation Analysis
-          </h2>
-          <p className="report-site-subtext">
-            <strong>Facility:</strong> {site.name} · <strong>Coordinates:</strong> {site.coordinates || "39.0274° N, 77.4586° W"} · <strong>Receptor Distance:</strong> {distanceM}m · <strong>Generated:</strong> {new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-          </p>
-        </div>
+      <div className="report-modal-dialog minimal-dialog animated-pop" onClick={(e) => e.stopPropagation()} tabIndex="-1">
+        <div className="minimal-report-canvas">
 
-        <div className="report-header-actions">
-          <button className="report-action-btn primary-print" onClick={handlePrint} title="Print or save as PDF">
-            🖨️ Print / PDF
-          </button>
-          <button className="report-action-btn secondary-copy" onClick={handleCopySummary} title="Copy executive summary to clipboard">
-            {copied ? "✓ Copied to Clipboard!" : "📋 Copy Summary"}
-          </button>
-          {onClose && (
-            <button className="report-close-btn" onClick={onClose} title="Close Report">
-              ✕
+          {/* Minimalist Top Header */}
+          <header className="min-header">
+            <div className="min-header-info">
+              <div className="min-header-title-row">
+                <h3>Acoustic Compliance & Budget Summary</h3>
+                <span className={`min-status-badge ${results.isCompliant ? "pass" : "fail"}`}>
+                  {results.isCompliant ? "✓ COMPLIANT" : "⚠️ VIOLATION"}
+                </span>
+              </div>
+              <span className="min-header-meta">
+                {site.name} · {site.coordinates || "39.0274° N, 77.4586° W"} · Receptor {distanceM}m · ISO 9613-2 Certified
+              </span>
+            </div>
+
+            <div className="min-header-actions">
+              <button className="min-btn" onClick={handlePrint} title="Print or save as PDF">🖨️ PDF</button>
+              <button className="min-btn" onClick={handleCopySummary} title="Copy summary">
+                {copied ? "✓ Copied" : "📋 Copy"}
+              </button>
+              {onClose && (
+                <button className="min-close-btn" onClick={onClose} title="Close popup">✕</button>
+              )}
+            </div>
+          </header>
+
+          {/* Minimal Clean Tabs */}
+          <nav className="min-nav-tabs">
+            <button
+              className={`min-tab ${activeTab === "dashboard" ? "active" : ""}`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              📊 Executive Dashboard
             </button>
+            <button
+              className={`min-tab ${activeTab === "formulas" ? "active" : ""}`}
+              onClick={() => setActiveTab("formulas")}
+            >
+              📐 Physics & Formulas
+            </button>
+            <button
+              className={`min-tab ${activeTab === "octave" ? "active" : ""}`}
+              onClick={() => setActiveTab("octave")}
+            >
+              📈 Octave Spectrum (63Hz - 8kHz)
+            </button>
+            <button
+              className={`min-tab ${activeTab === "thermo" ? "active" : ""}`}
+              onClick={() => setActiveTab("thermo")}
+            >
+              🔬 Thermodynamic Cycle
+            </button>
+          </nav>
+
+          {/* TAB 1: EXECUTIVE DASHBOARD (TWO BALANCED HALVES, MINIMAL SCROLLING) */}
+          {activeTab === "dashboard" && (
+            <div className="min-two-halves-grid animated-fadeIn">
+
+              {/* ─── LEFT HALF: SHORTENED SECTION 1 (KPI) + SECTION 3 (WATERFALL) ─── */}
+              <div className="dashboard-half left-half">
+                
+                {/* Shortened Section 1: Top Metric Banner */}
+                <div className="min-metric-banner">
+                  <div className="banner-primary">
+                    <span className="banner-sublabel">NET SOUND AT RESIDENTIAL PROPERTY LINE</span>
+                    <div className="banner-number-row">
+                      <strong className="banner-big-val">{results.netReceivedLp?.toFixed(1)}</strong>
+                      <span className="banner-unit">dBA</span>
+                      <span className={`banner-margin-tag ${results.isCompliant ? "margin-pass" : "margin-fail"}`}>
+                        {results.marginDb >= 0 ? `+${results.marginDb?.toFixed(1)} dB Margin` : `${results.marginDb?.toFixed(1)} dB Violation`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="banner-stats-inline">
+                    <span>Curfew Limit: <b>{results.activeLegalLimit} dBA</b></span>
+                    <span>Source Lw: <b>{results.sourceLw} dBA</b></span>
+                    <span>Tonal Hum: <b>{results.netReceivedLpC?.toFixed(1)} dBC</b></span>
+                  </div>
+                </div>
+
+                {/* Shortened Section 3: Link Budget Waterfall */}
+                <div className="min-card">
+                  <div className="min-card-header">
+                    <h4>ISO 9613-2 Link Budget Waterfall</h4>
+                    <span className="min-tag">Silicon → Porch</span>
+                  </div>
+
+                  <table className="min-waterfall-table">
+                    <tbody>
+                      <tr>
+                        <td>Chiller Sound Power (Lw)</td>
+                        <td className="desc-cell">{fanSpeedPercent}% fan speed, {itPowerKw} kW load</td>
+                        <td className="val-cell"><b>{results.sourceLw} dBA</b></td>
+                      </tr>
+                      <tr>
+                        <td>Geometric Spreading Decay</td>
+                        <td className="desc-cell">−20 log₁₀({distanceM}m) − 11 dB</td>
+                        <td className="val-cell minus">−{results.breakdown?.geometricDecay} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Nocturnal Inversion Lens</td>
+                        <td className="desc-cell">Ground cooling thermal boundary</td>
+                        <td className="val-cell plus">+{results.breakdown?.inversionEffect} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Building Placement Shield</td>
+                        <td className="desc-cell">{currentPlacement.name}</td>
+                        <td className="val-cell minus">−{results.breakdown?.placementAttenuation} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Acoustic Barrier Wall</td>
+                        <td className="desc-cell">{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name}` : "None"}</td>
+                        <td className="val-cell minus">−{results.breakdown?.wallAttenuation} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Bio-Acoustic Tree Buffer</td>
+                        <td className="desc-cell">{config.treeEnabled ? `${treeBufferDepth}m ${currentTree.name}` : "None"}</td>
+                        <td className="val-cell minus">−{results.breakdown?.treeAttenuation} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Directivity & Louver Angle</td>
+                        <td className="desc-cell">Turned {config.chillerOrientationAngle || 90}° from homes</td>
+                        <td className="val-cell minus">−{results.breakdown?.directivityAttenuation} dB</td>
+                      </tr>
+                      <tr>
+                        <td>Suburban Ambient Floor</td>
+                        <td className="desc-cell">Nocturnal calm background addition</td>
+                        <td className="val-cell">+{results.backgroundNoiseFloor} dBA</td>
+                      </tr>
+                      <tr className="waterfall-total-row">
+                        <td><strong>Net Sound at Boundary</strong></td>
+                        <td className="desc-cell"><strong>{results.complianceStatus}</strong></td>
+                        <td className="val-cell total"><strong>{results.netReceivedLp?.toFixed(1)} dBA</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ─── RIGHT HALF: SECTION 4 (EXPENDITURES) + ATTENUATION ANALYSIS CHART ─── */}
+              <div className="dashboard-half right-half">
+
+                {/* Section 4: Capital & Operating Expenditures Grid */}
+                <div className="min-card">
+                  <div className="min-card-header">
+                    <h4>Capital & Operating Expenditures</h4>
+                    <span className="min-tag">Budget & Risk</span>
+                  </div>
+
+                  <div className="min-cost-grid">
+                    <div className="min-cost-box">
+                      <span className="cost-label">WALL CAPEX</span>
+                      <strong className="cost-val">${wallCost.toLocaleString()}</strong>
+                      <span className="cost-sub">{wallArea} m² ({config.wallHeightMeters || 8}m high {currentWall.name})</span>
+                    </div>
+
+                    <div className="min-cost-box">
+                      <span className="cost-label">TREE BUFFER OPEX</span>
+                      <strong className="cost-val">${treeMaintCost.toLocaleString()}<small>/yr</small></strong>
+                      <span className="cost-sub">{treeCount} trees ({treeBufferDepth}m depth, {treeWaterGal.toLocaleString()} gal/yr)</span>
+                    </div>
+
+                    <div className="min-cost-box">
+                      <span className="cost-label">CARBON BALANCE</span>
+                      <strong className="cost-val">{wallCarbon.toLocaleString()} <small>kg CO₂</small></strong>
+                      <span className="cost-sub">−{treeCo2Seq.toLocaleString()} kg/yr tree sequestration</span>
+                    </div>
+
+                    <div className="min-cost-box highlight-cost">
+                      <span className="cost-label">FINES AVOIDED</span>
+                      <strong className="cost-val">${(annualAvoidedFines / 1000000).toFixed(2)}M<small>/yr</small></strong>
+                      <span className="cost-sub">$25k/day Loudoun moratorium fine</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Attenuation Analysis Bar */}
+                <div className="min-card">
+                  <div className="min-card-header">
+                    <h4>Cumulative Sound Reduction Breakdown</h4>
+                    <span className="min-tag">−{results.breakdown?.totalMitigationDb} dB Total</span>
+                  </div>
+
+                  <div className="min-atten-bars">
+                    <div className="atten-bar-item">
+                      <div className="atten-bar-labels">
+                        <span>Distance Decay ({distanceM}m)</span>
+                        <b>−{results.breakdown?.geometricDecay} dB</b>
+                      </div>
+                      <div className="atten-track">
+                        <div className="atten-fill fill-slate" style={{ width: `${Math.min(100, (results.breakdown?.geometricDecay / 80) * 100)}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="atten-bar-item">
+                      <div className="atten-bar-labels">
+                        <span>Building Placement Shield</span>
+                        <b>−{results.breakdown?.placementAttenuation} dB</b>
+                      </div>
+                      <div className="atten-track">
+                        <div className="atten-fill fill-blue" style={{ width: `${Math.min(100, (results.breakdown?.placementAttenuation / 28) * 100)}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="atten-bar-item">
+                      <div className="atten-bar-labels">
+                        <span>Acoustic Barrier Wall</span>
+                        <b>−{results.breakdown?.wallAttenuation} dB</b>
+                      </div>
+                      <div className="atten-track">
+                        <div className="atten-fill fill-indigo" style={{ width: `${Math.min(100, (results.breakdown?.wallAttenuation / 26) * 100)}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="atten-bar-item">
+                      <div className="atten-bar-labels">
+                        <span>Bio-Acoustic Vegetation</span>
+                        <b>−{results.breakdown?.treeAttenuation} dB</b>
+                      </div>
+                      <div className="atten-track">
+                        <div className="atten-fill fill-emerald" style={{ width: `${Math.min(100, (results.breakdown?.treeAttenuation / 14) * 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Compact Thermal Callout */}
+                  <div className="min-thermal-callout">
+                    <span>⚡ <b>Thermodynamic Heat Rejection:</b> {itPowerKw} kW server load produces {(itPowerKw * 1.15).toFixed(0)} kW heat continuously rejected outdoors by 2-meter condenser fan arrays.</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           )}
-        </div>
-      </header>
 
-      {/* Navigation Filter Tabs */}
-      <div className="report-nav-tabs">
-        <button
-          className={`report-tab-pill ${activeReportTab === "all" ? "active" : ""}`}
-          onClick={() => setActiveReportTab("all")}
-        >
-          📑 Full Comprehensive Report
-        </button>
-        <button
-          className={`report-tab-pill ${activeReportTab === "formulas" ? "active" : ""}`}
-          onClick={() => setActiveReportTab("formulas")}
-        >
-          📐 Governing Physics & Formulas
-        </button>
-        <button
-          className={`report-tab-pill ${activeReportTab === "waterfall" ? "active" : ""}`}
-          onClick={() => setActiveReportTab("waterfall")}
-        >
-          📊 ISO 9613-2 Link Budget Waterfall
-        </button>
-        <button
-          className={`report-tab-pill ${activeReportTab === "economics" ? "active" : ""}`}
-          onClick={() => setActiveReportTab("economics")}
-        >
-          💰 CAPEX, OPEX & Risk ROI
-        </button>
-        <button
-          className={`report-tab-pill ${activeReportTab === "octave" ? "active" : ""}`}
-          onClick={() => setActiveReportTab("octave")}
-        >
-          📈 Octave-Band Frequency Spectrum
-        </button>
-      </div>
-
-      <div className="report-body-content">
-        {/* =========================================================================
-            SECTION 1: EXECUTIVE KPI SUMMARY CARDS
-            ========================================================================= */}
-        {(activeReportTab === "all" || activeReportTab === "waterfall") && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">01</span>
-              <div>
-                <h3 className="section-title">Executive Receptor Telemetry & Compliance Summary</h3>
-                <p className="section-sub">Measured at closest residential property boundary ({distanceM} meters from mechanical cooling plant)</p>
-              </div>
-            </div>
-
-            <div className="report-kpi-grid">
-              <div className="kpi-card highlight-card">
-                <span className="kpi-label">NET RECEIVED DECIBELS</span>
-                <div className="kpi-hero-num" style={{ color: results.statusColor }}>
-                  {results.netReceivedLp.toFixed(1)} <small>dBA</small>
-                </div>
-                <div className="kpi-footer-detail">
-                  <span>Municipal Curfew Limit: <strong>{results.activeLegalLimit} dBA</strong></span>
-                  <span className={`compliance-pill ${results.isCompliant ? "pass" : "fail"}`}>
-                    {results.marginDb >= 0 ? `+${results.marginDb.toFixed(1)} dB Margin` : `${results.marginDb.toFixed(1)} dB Violation`}
-                  </span>
-                </div>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">TOTAL SOUND MITIGATION</span>
-                <div className="kpi-hero-num text-emerald">
-                  -{results.breakdown.totalMitigationDb.toFixed(1)} <small>dB</small>
-                </div>
-                <div className="kpi-footer-detail">
-                  <span>Unmitigated Line: <strong>{results.unmitigatedLp.toFixed(1)} dBA</strong></span>
-                  <span className="kpi-subtag">Spatial Attenuation</span>
-                </div>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">LOW-FREQUENCY TONAL HUM</span>
-                <div className="kpi-hero-num text-indigo">
-                  {results.netReceivedLpC.toFixed(1)} <small>dBC</small>
-                </div>
-                <div className="kpi-footer-detail">
-                  <span>C-A Delta: <strong>+{results.lowFreqExcess} dB</strong></span>
-                  <span className="kpi-subtag">Compressor 60/120Hz Tone</span>
-                </div>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">STATUTORY PENALTY AVOIDED</span>
-                <div className="kpi-hero-num text-sky">
-                  ${(annualAvoidedFines / 1000000).toFixed(2)}M<small>/yr</small>
-                </div>
-                <div className="kpi-footer-detail">
-                  <span>$25k/day Loudoun Curfew Fine</span>
-                  <span className="kpi-subtag">Zero Moratorium Risk</span>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================================
-            SECTION 2: GOVERNING PHYSICS & NOISE REDUCTION FORMULAS
-            ========================================================================= */}
-        {(activeReportTab === "all" || activeReportTab === "formulas") && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">02</span>
-              <div>
-                <h3 className="section-title">Governing Acoustic Physics & Noise Reduction Formulas</h3>
-                <p className="section-sub">Standard mathematical models codified in ISO 9613-2, Maekawa Diffraction, and ASHRAE TC 9.9</p>
-              </div>
-            </div>
-
-            <div className="formulas-two-column-grid">
-              {/* Formula Card 1: Maekawa Barrier Diffraction */}
-              <div className="formula-white-card">
-                <div className="formula-card-header">
-                  <span className="formula-badge">FORMULA 1</span>
-                  <h4>Maekawa Knife-Edge Barrier Diffraction (A_barrier)</h4>
-                </div>
-                <div className="math-equation-block">
-                  <div className="equation-line">
-                    <span className="math-lhs">A<sub>barrier</sub></span>
-                    <span className="math-eq">=</span>
-                    <span className="math-rhs">
-                      10 log<sub>10</sub>(3 + 20 · <span className="math-param">N</span>) + <span className="math-param">NRC<sub>bonus</sub></span>
-                    </span>
+          {/* TAB 2: GOVERNING PHYSICS & FORMULAS (ONLY FORMULAS, ZERO DUPLICATE CONTENT) */}
+          {activeTab === "formulas" && (
+            <div className="min-tab-content-scroll animated-fadeIn">
+              <div className="formulas-two-column-grid">
+                
+                <div className="formula-white-card">
+                  <div className="formula-card-header">
+                    <span className="formula-badge">FORMULA 1</span>
+                    <h4>Maekawa Knife-Edge Barrier Diffraction</h4>
                   </div>
-                  <div className="equation-subline">
-                    Where Fresnel Number: <span className="math-param">N</span> = <span className="fraction"><span>2 · δ</span><span>λ</span></span> = <span className="fraction"><span>2 · (d<sub>1</sub> + d<sub>2</sub> − d<sub>direct</sub>)</span><span>λ</span></span>
+                  <div className="math-equation-block">
+                    <div className="equation-line">
+                      <span className="math-lhs">A<sub>barrier</sub></span> = 10 log<sub>10</sub>(3 + 20 · <span className="math-param">N</span>) + <span className="math-param">NRC<sub>bonus</sub></span>
+                    </div>
+                    <div className="equation-subline">
+                      Fresnel Number: N = 2δ / λ = 2 · ({diffPath.toFixed(2)}m − {directDist.toFixed(2)}m) / 2.86m = <strong>{fresnelN.toFixed(4)}</strong>
+                    </div>
                   </div>
-                </div>
-
-                <div className="formula-live-calculation">
-                  <span className="calc-eyebrow">LIVE COMPUTED DERIVATION FOR CURRENT GEOMETRY:</span>
-                  <div className="calc-steps">
+                  <div className="formula-live-calculation">
                     <div className="step-row">
-                      <span>1. Dominant Compressor Wavelength (λ at 120 Hz):</span>
+                      <span>Wavelength (120 Hz compressor tone):</span>
                       <strong>2.86 meters</strong>
                     </div>
                     <div className="step-row">
-                      <span>2. Barrier Path Difference (δ = {diffPath.toFixed(3)}m − {directDist.toFixed(3)}m):</span>
-                      <strong>{deltaPath.toFixed(3)} meters</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>3. Resulting Fresnel Number (N = 2 · {deltaPath.toFixed(3)} / 2.86):</span>
-                      <strong>{fresnelN.toFixed(4)}</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>4. Material NRC Bonus ({currentWall.name}, NRC {currentWall.nrcRating}):</span>
-                      <strong>+{currentWall.nrcRating >= 0.8 ? "2.5" : "1.0"} dB</strong>
+                      <span>Material NRC ({currentWall.name}):</span>
+                      <strong>NRC {currentWall.nrcRating} (+{currentWall.nrcRating >= 0.8 ? "2.5" : "1.0"} dB)</strong>
                     </div>
                     <div className="step-row total-step">
-                      <span>⇒ Total Barrier Insertion Loss Achieved:</span>
-                      <strong className="text-emerald">-{results.breakdown.wallAttenuation.toFixed(1)} dB</strong>
+                      <span>Barrier Insertion Loss:</span>
+                      <strong className="text-emerald">−{results.breakdown?.wallAttenuation.toFixed(1)} dB</strong>
                     </div>
                   </div>
                 </div>
-                <p className="formula-explanation">
-                  <strong>Engineering Significance:</strong> Sound diffracts around barrier lips. Increasing barrier height from 4m to {config.wallHeightMeters}m increases path difference δ, forcing acoustic energy into high diffraction orders. High NRC surfaces prevent internal reflection buildup.
-                </p>
-              </div>
 
-              {/* Formula Card 2: ISO 9613-2 Geometric Decay */}
-              <div className="formula-white-card">
-                <div className="formula-card-header">
-                  <span className="formula-badge">FORMULA 2</span>
-                  <h4>ISO 9613-2 Hemispherical Geometric Decay & Propagation Link Budget</h4>
-                </div>
-                <div className="math-equation-block">
-                  <div className="equation-line">
-                    <span className="math-lhs">L<sub>p</sub>(d)</span>
-                    <span className="math-eq">=</span>
-                    <span className="math-rhs">
-                      L<sub>w</sub> − 20 log<sub>10</sub>(d) − 11 + A<sub>terrain</sub> + A<sub>inversion</sub> − ∑ A<sub>mitigations</sub>
-                    </span>
+                <div className="formula-white-card">
+                  <div className="formula-card-header">
+                    <span className="formula-badge">FORMULA 2</span>
+                    <h4>ISO 9613-2 Geometric Distance Decay</h4>
                   </div>
-                  <div className="equation-subline">
-                    Geometric Free-Field Spreading: A<sub>div</sub> = 20 log<sub>10</sub>({distanceM}) + 11 = <strong>{results.breakdown.geometricDecay} dB</strong>
+                  <div className="math-equation-block">
+                    <div className="equation-line">
+                      <span className="math-lhs">L<sub>p</sub>(d)</span> = L<sub>w</sub> − 20 log<sub>10</sub>(d) − 11 + A<sub>atm</sub> − ∑ A<sub>mitigation</sub>
+                    </div>
+                    <div className="equation-subline">
+                      Geometric Spreading at {distanceM}m: 20 log₁₀({distanceM}) + 11 = <strong>{results.breakdown?.geometricDecay} dB</strong>
+                    </div>
                   </div>
-                </div>
-
-                <div className="formula-live-calculation">
-                  <span className="calc-eyebrow">LIVE COMPUTED DERIVATION:</span>
-                  <div className="calc-steps">
+                  <div className="formula-live-calculation">
                     <div className="step-row">
-                      <span>1. Source Chiller Sound Power (Lw):</span>
+                      <span>Chiller Source Power (Lw):</span>
                       <strong>{results.sourceLw} dBA</strong>
                     </div>
                     <div className="step-row">
-                      <span>2. Geometric Spreading Loss ({distanceM}m):</span>
-                      <strong>-{results.breakdown.geometricDecay} dB</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>3. Atmospheric Nocturnal Inversion ({timeOfDay}):</span>
-                      <strong>{timeOfDay === "night" ? "+1.8 dB (Inversion Lens)" : "-1.2 dB (Solar Lapse)"}</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>4. Terrain Canyon Reflection Echo:</span>
-                      <strong>+{results.breakdown.terrainEchoDb} dB</strong>
+                      <span>Nocturnal Atmospheric Inversion:</span>
+                      <strong>+{results.breakdown?.inversionEffect} dB</strong>
                     </div>
                     <div className="step-row total-step">
-                      <span>⇒ Unmitigated Sound Level at Residential Line:</span>
+                      <span>Unmitigated Boundary Level:</span>
                       <strong className="text-rose">{results.unmitigatedLp.toFixed(1)} dBA</strong>
                     </div>
                   </div>
                 </div>
-                <p className="formula-explanation">
-                  <strong>Engineering Significance:</strong> In free space, sound decays at 6 dB per doubling of distance. At night, ground cooling creates an acoustic thermal inversion that bends sound waves downward toward suburban bedrooms, making passive barriers critical.
-                </p>
-              </div>
 
-              {/* Formula Card 3: Bio-Acoustic Foliage Scattering */}
-              <div className="formula-white-card">
-                <div className="formula-card-header">
-                  <span className="formula-badge">FORMULA 3</span>
-                  <h4>Bio-Acoustic Foliage Scattering & Porous Soil Ground Attenuation</h4>
-                </div>
-                <div className="math-equation-block">
-                  <div className="equation-line">
-                    <span className="math-lhs">A<sub>veg</sub></span>
-                    <span className="math-eq">=</span>
-                    <span className="math-rhs">
-                      12 · (1 − e<sup>−(α · d<sub>buffer</sub> / 10)</sup>) + A<sub>ground_porous</sub>
-                    </span>
+                <div className="formula-white-card">
+                  <div className="formula-card-header">
+                    <span className="formula-badge">FORMULA 3</span>
+                    <h4>Bio-Acoustic Foliage Scattering & Ground Effect</h4>
                   </div>
-                  <div className="equation-subline">
-                    Where α = {currentTree.acousticAbsorptionCoeff} dB/m for {currentTree.name} ({currentTree.foliageType})
+                  <div className="math-equation-block">
+                    <div className="equation-line">
+                      <span className="math-lhs">A<sub>veg</sub></span> = 12 · (1 − e<sup>−(α · d / 10)</sup>) + A<sub>ground</sub>
+                    </div>
+                    <div className="equation-subline">
+                      Species α = {currentTree.acousticAbsorptionCoeff} dB/m ({currentTree.name})
+                    </div>
                   </div>
-                </div>
-
-                <div className="formula-live-calculation">
-                  <span className="calc-eyebrow">LIVE BIO-ACOUSTIC PARAMETERS:</span>
-                  <div className="calc-steps">
+                  <div className="formula-live-calculation">
                     <div className="step-row">
-                      <span>1. Planted Buffer Depth (d<sub>buffer</sub>):</span>
+                      <span>Planted Depth:</span>
                       <strong>{treeBufferDepth} meters</strong>
                     </div>
                     <div className="step-row">
-                      <span>2. Species Absorption Coefficient (α):</span>
-                      <strong>{currentTree.acousticAbsorptionCoeff} dB/m</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>3. Asymptotic Foliage Multi-Scattering Loss:</span>
-                      <strong>-{(results.breakdown.treeAttenuation - (treeBufferDepth >= 10 ? 2.5 : 0)).toFixed(1)} dB</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>4. Forest Floor Porous Ground Effect Bonus:</span>
-                      <strong>-{treeBufferDepth >= 10 ? "2.5" : "0.0"} dB</strong>
+                      <span>Porous Soil Humus Bonus:</span>
+                      <strong>−{treeBufferDepth >= 10 ? "2.5" : "0.0"} dB</strong>
                     </div>
                     <div className="step-row total-step">
-                      <span>⇒ Total Bio-Buffer Attenuation Achieved:</span>
-                      <strong className="text-emerald">-{results.breakdown.treeAttenuation.toFixed(1)} dB</strong>
+                      <span>Tree Buffer Attenuation:</span>
+                      <strong className="text-emerald">−{results.breakdown?.treeAttenuation.toFixed(1)} dB</strong>
                     </div>
                   </div>
                 </div>
-                <p className="formula-explanation">
-                  <strong>Engineering Significance:</strong> Foliage multi-scatters acoustic wavefronts, converting cohesive 60Hz fan droning into diffuse white noise. Organic leaf litter and root systems eliminate hard acoustic ground bounce reflections.
-                </p>
-              </div>
 
-              {/* Formula Card 4: Thermodynamic Heat Generation */}
-              <div className="formula-white-card">
-                <div className="formula-card-header">
-                  <span className="formula-badge">FORMULA 4</span>
-                  <h4>Thermodynamic Silicon Heat Generation & Acoustic Scaling (2nd Law)</h4>
-                </div>
-                <div className="math-equation-block">
-                  <div className="equation-line">
-                    <span className="math-lhs">Q<sub>thermal</sub></span>
-                    <span className="math-eq">=</span>
-                    <span className="math-rhs">
-                      P<sub>IT</sub> + P<sub>fans</sub> ≈ 1.15 · P<sub>IT</sub>
-                    </span>
+                <div className="formula-white-card">
+                  <div className="formula-card-header">
+                    <span className="formula-badge">FORMULA 4</span>
+                    <h4>Thermodynamic Scaling & Fan Aerodynamics</h4>
                   </div>
-                  <div className="equation-subline">
-                    Acoustic Scaling: L<sub>w</sub> = 108.0 + ΔT<sub>ambient</sub> + 18 log<sub>10</sub>(RPM/RPM<sub>nom</sub>) + 10 log<sub>10</sub>(P<sub>IT</sub>/500)
+                  <div className="math-equation-block">
+                    <div className="equation-line">
+                      <span className="math-lhs">Q<sub>thermal</sub></span> ≈ 1.15 · P<sub>IT</sub>, &nbsp; L<sub>w</sub> ∝ 18 log<sub>10</sub>(RPM / RPM<sub>nom</sub>)
+                    </div>
+                    <div className="equation-subline">
+                      Tip speed scales noise by ~50 log₁₀(speed) across 2m axial fan wheels
+                    </div>
                   </div>
-                </div>
-
-                <div className="formula-live-calculation">
-                  <span className="calc-eyebrow">LIVE THERMODYNAMIC SCALING:</span>
-                  <div className="calc-steps">
+                  <div className="formula-live-calculation">
                     <div className="step-row">
-                      <span>1. Server IT Compute Workload (P<sub>IT</sub>):</span>
+                      <span>IT Server Compute Load:</span>
                       <strong>{itPowerKw} kW</strong>
                     </div>
                     <div className="step-row">
-                      <span>2. Thermal Heat Rejected Outdoors (Q<sub>thermal</sub>):</span>
-                      <strong>{(itPowerKw * 1.15).toFixed(0)} kW ({(itPowerKw * 1.15 * 3412 / 12000).toFixed(0)} Tons)</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>3. Chiller Fan Duty / Speed:</span>
-                      <strong>{fanSpeedPercent}% of Maximum RPM</strong>
-                    </div>
-                    <div className="step-row">
-                      <span>4. Fan Tip Speed Acoustic Contribution:</span>
-                      <strong>{(18 * Math.log10(Math.max(0.3, fanSpeedPercent / 100) / 0.7)).toFixed(1)} dB</strong>
+                      <span>Outdoor Thermal Rejection:</span>
+                      <strong>{(itPowerKw * 1.15).toFixed(0)} kW</strong>
                     </div>
                     <div className="step-row total-step">
-                      <span>⇒ Chiller Source Sound Power Level (Lw):</span>
+                      <span>Resulting Source Lw:</span>
                       <strong className="text-indigo">{results.sourceLw} dBA</strong>
                     </div>
                   </div>
                 </div>
-                <p className="formula-explanation">
-                  <strong>Engineering Significance:</strong> A data center converts 100% of electrical computing power into heat. By the 2nd Law of Thermodynamics, this heat cannot be destroyed; it must be continuously rejected into outdoor ambient air via condenser fan arrays, generating intense acoustic power.
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: OCTAVE SPECTRUM (ONLY OCTAVE TABLE, ZERO DUPLICATE CONTENT) */}
+          {activeTab === "octave" && (
+            <div className="min-tab-content-scroll animated-fadeIn">
+              <div className="table-wrapper-card">
+                <table className="clean-report-table">
+                  <thead>
+                    <tr>
+                      <th>Octave Band</th>
+                      <th>Source (Lw)</th>
+                      <th>Distance Loss</th>
+                      <th>Air Abs.</th>
+                      <th>Barrier Loss</th>
+                      <th>Tree Loss</th>
+                      <th>Receptor (dBL)</th>
+                      <th>A-Weighting (dBA)</th>
+                      <th>C-Weighting (dBC)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {octaveData.map((row) => (
+                      <tr key={row.freq} className={row.freq === 125 ? "table-row-highlight" : ""}>
+                        <td>
+                          <strong>{row.label}</strong>
+                          {row.freq === 125 && <span className="tone-indicator">★ 120Hz Compressor Tone</span>}
+                        </td>
+                        <td>{row.sourceLw.toFixed(1)} dB</td>
+                        <td>−{row.geomLoss.toFixed(1)} dB</td>
+                        <td>−{row.airLoss.toFixed(1)} dB</td>
+                        <td>−{row.wallLoss.toFixed(1)} dB</td>
+                        <td>−{row.vegLoss.toFixed(1)} dB</td>
+                        <td><strong>{row.unweightedLp.toFixed(1)} dB</strong></td>
+                        <td><strong className={row.aWeightedLp > 35 ? "text-rose" : "text-emerald"}>{row.aWeightedLp.toFixed(1)} dBA</strong></td>
+                        <td><strong className="text-indigo">{row.cWeightedLp.toFixed(1)} dBC</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="octave-notes-box">
+                <p>
+                  <strong>Low-Frequency Hum (63 Hz & 125 Hz):</strong> Screw compressors generate tonal energy at 60 Hz and 120 Hz. While A-weighting de-emphasizes this by −16.1 dB to reflect human ear response, low-frequency hum easily penetrates residential windows and vibrates drywall. Monitoring both <strong>dBA</strong> and <strong>dBC</strong> ensures both legal compliance and real-world neighbor comfort.
                 </p>
               </div>
             </div>
-          </section>
-        )}
+          )}
 
-        {/* =========================================================================
-            SECTION 3: ISO 9613-2 LINK BUDGET WATERFALL
-            ========================================================================= */}
-        {(activeReportTab === "all" || activeReportTab === "waterfall") && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">03</span>
-              <div>
-                <h3 className="section-title">Complete ISO 9613-2 Acoustic Link Budget Waterfall</h3>
-                <p className="section-sub">Detailed numeric attenuation tracking from silicon compute core to residential receptor porch</p>
-              </div>
-            </div>
-
-            <div className="table-wrapper-card">
-              <table className="clean-report-table">
-                <thead>
-                  <tr>
-                    <th>Step #</th>
-                    <th>Acoustic Propagation Stage</th>
-                    <th>Physics Mechanism</th>
-                    <th>Stage Value</th>
-                    <th>Cumulative Sound</th>
-                    <th>Impact / Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="table-row-source">
-                    <td><strong>01</strong></td>
-                    <td><strong>Chiller Source Emission (Lw)</strong></td>
-                    <td>Compressor screw lift + condenser fan aerodynamics</td>
-                    <td><span className="badge-source">{results.sourceLw} dBA</span></td>
-                    <td><strong>{results.sourceLw} dBA</strong></td>
-                    <td>Source power at 1m reference sphere</td>
-                  </tr>
-                  <tr>
-                    <td><strong>02</strong></td>
-                    <td>Geometric Spreading Decay (A<sub>div</sub>)</td>
-                    <td>20 · log<sub>10</sub>({distanceM}m) + 11.0 dB (ISO 9613-2)</td>
-                    <td><span className="badge-atten">-{results.breakdown.geometricDecay} dB</span></td>
-                    <td><strong>{(results.sourceLw - results.breakdown.geometricDecay).toFixed(1)} dBA</strong></td>
-                    <td>Hemispherical free-field propagation</td>
-                  </tr>
-                  <tr>
-                    <td><strong>03</strong></td>
-                    <td>Atmospheric Inversion / Solar Lapse</td>
-                    <td>Nocturnal boundary layer thermal stratification</td>
-                    <td><span className={timeOfDay === "night" ? "badge-boost" : "badge-atten"}>{timeOfDay === "night" ? `+${results.breakdown.inversionEffect}` : results.breakdown.inversionEffect} dB</span></td>
-                    <td><strong>{(results.sourceLw - results.breakdown.geometricDecay + results.breakdown.inversionEffect).toFixed(1)} dBA</strong></td>
-                    <td>Downwind / cool ground acoustic ducting</td>
-                  </tr>
-                  <tr>
-                    <td><strong>04</strong></td>
-                    <td>Terrain Basalt / Canyon Reflection</td>
-                    <td>Specular acoustic reflection from topography</td>
-                    <td><span className={results.breakdown.terrainEchoDb > 0 ? "badge-boost" : "badge-neutral"}>+{results.breakdown.terrainEchoDb} dB</span></td>
-                    <td><strong>{results.unmitigatedLp.toFixed(1)} dBA</strong></td>
-                    <td>Unmitigated sound level at receptor</td>
-                  </tr>
-                  <tr className="table-row-divider">
-                    <td colSpan="6"><strong>─── ACTIVE SPATIAL MITIGATION LAYERS APPLIED ───</strong></td>
-                  </tr>
-                  <tr>
-                    <td><strong>05</strong></td>
-                    <td>Architectural Placement Shielding</td>
-                    <td>{currentPlacement.name} ({currentPlacement.tag})</td>
-                    <td><span className="badge-atten">-{results.breakdown.placementAttenuation} dB</span></td>
-                    <td><strong>{(results.unmitigatedLp - results.breakdown.placementAttenuation).toFixed(1)} dBA</strong></td>
-                    <td>Building acoustic shadow / earth berms</td>
-                  </tr>
-                  <tr>
-                    <td><strong>06</strong></td>
-                    <td>Acoustic Barrier Wall Insertion Loss</td>
-                    <td>{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name} (NRC ${currentWall.nrcRating})` : "Disabled (No wall)"}</td>
-                    <td><span className="badge-atten">-{results.breakdown.wallAttenuation} dB</span></td>
-                    <td><strong>{(results.unmitigatedLp - results.breakdown.placementAttenuation - results.breakdown.wallAttenuation).toFixed(1)} dBA</strong></td>
-                    <td>Maekawa diffraction + mineral wool absorption</td>
-                  </tr>
-                  <tr>
-                    <td><strong>07</strong></td>
-                    <td>Bio-Acoustic Foliage Buffer Zone</td>
-                    <td>{config.treeEnabled ? `${treeBufferDepth}m ${currentTree.name} buffer` : "Disabled (No trees)"}</td>
-                    <td><span className="badge-atten">-{results.breakdown.treeAttenuation} dB</span></td>
-                    <td><strong>{(results.unmitigatedLp - results.breakdown.placementAttenuation - results.breakdown.wallAttenuation - results.breakdown.treeAttenuation).toFixed(1)} dBA</strong></td>
-                    <td>Needle multi-scattering + porous soil sponge</td>
-                  </tr>
-                  <tr>
-                    <td><strong>08</strong></td>
-                    <td>Directivity & Intake Silencers</td>
-                    <td>Chiller louvers angled {config.chillerOrientationAngle || 90}° away from homes</td>
-                    <td><span className="badge-atten">-{results.breakdown.directivityAttenuation} dB</span></td>
-                    <td><strong>{(results.unmitigatedLp - results.breakdown.totalMitigationDb).toFixed(1)} dBA</strong></td>
-                    <td>Acoustic blanket wraps & directional louvers</td>
-                  </tr>
-                  <tr>
-                    <td><strong>09</strong></td>
-                    <td>Suburban Ambient Noise Floor (L<sub>bg</sub>)</td>
-                    <td>Logarithmic intensity addition with nocturnal background</td>
-                    <td><span className="badge-neutral">+{results.backgroundNoiseFloor} dBA</span></td>
-                    <td><strong>{results.netReceivedLp.toFixed(1)} dBA</strong></td>
-                    <td>Natural night background floor limit</td>
-                  </tr>
-                  <tr className="table-row-total">
-                    <td><strong>✓</strong></td>
-                    <td><strong>NET RECEIVED SOUND LEVEL AT PORCH</strong></td>
-                    <td><strong>Combined Acoustic Sound Pressure (L<sub>p</sub>)</strong></td>
-                    <td><span className="badge-highlight">{results.netReceivedLp.toFixed(1)} dBA</span></td>
-                    <td><strong style={{ color: results.statusColor, fontSize: "16px" }}>{results.netReceivedLp.toFixed(1)} dBA</strong></td>
-                    <td><strong>{results.marginDb >= 0 ? `COMPLIANT (+${results.marginDb.toFixed(1)} dB safe margin)` : `VIOLATION (${results.marginDb.toFixed(1)} dB)`}</strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================================
-            SECTION 4: CAPEX, OPEX & RISK ROI ANALYSIS
-            ========================================================================= */}
-        {(activeReportTab === "all" || activeReportTab === "economics") && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">04</span>
-              <div>
-                <h3 className="section-title">Comprehensive Financial CAPEX, OPEX & Carbon ROI Analysis</h3>
-                <p className="section-sub">Capital expenditure requirements, lifecycle operating costs, carbon footprint, and regulatory fine avoidance</p>
-              </div>
-            </div>
-
-            <div className="economics-summary-grid">
-              {/* Card 1: Wall CAPEX */}
-              <div className="eco-detail-card">
-                <div className="eco-card-header">
-                  <span className="eco-icon">🧱</span>
-                  <div>
-                    <h4>Acoustic Barrier Wall CAPEX</h4>
-                    <span className="eco-subtitle">{currentWall.name}</span>
+          {/* TAB 4: THERMODYNAMICS (ONLY 2ND LAW EXPLANATION, ZERO DUPLICATE CONTENT) */}
+          {activeTab === "thermo" && (
+            <div className="min-tab-content-scroll animated-fadeIn">
+              <div className="thermo-card-white">
+                <div className="thermo-card-grid">
+                  <div className="thermo-col">
+                    <h4>The Silicon Heat Rejection Cycle</h4>
+                    <p>
+                      Every watt of electricity powering servers degrades 100% into thermal heat under the 1st and 2nd Laws of Thermodynamics. To keep server inlet air between 18°C and 27°C (ASHRAE TC 9.9), chilled water loops continuously absorb this heat and pump it to outdoor chillers.
+                    </p>
+                    <p>
+                      Heat cannot spontaneously flow from cool server rooms to hot summer air. Refrigeration compressors must lift this thermal energy and force it into outdoor air, requiring high-pressure compressor stages that generate structural 60/120Hz vibration.
+                    </p>
                   </div>
-                </div>
-                <div className="eco-card-metric">
-                  <span className="currency">$</span>
-                  <span className="amount">{wallCost.toLocaleString()}</span>
-                </div>
-                <div className="eco-stat-list">
-                  <div className="eco-stat-item">
-                    <span>Wall Height & Perimeter:</span>
-                    <strong>{config.wallHeightMeters}m × {wallPerimeter}m</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Total Surface Area:</span>
-                    <strong>{wallArea} m² ({Math.round(wallArea * 10.764)} sq ft)</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Unit Material Cost:</span>
-                    <strong>${currentWall.costPerSqMeter} / m²</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Embodied Carbon Footprint:</span>
-                    <strong>{wallCarbon.toLocaleString()} kg CO₂</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Design Lifespan:</span>
-                    <strong>{currentWall.durabilityYears} Years</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Bio-Buffer OPEX & Ecology */}
-              <div className="eco-detail-card">
-                <div className="eco-card-header">
-                  <span className="eco-icon">🌲</span>
-                  <div>
-                    <h4>Bio-Acoustic Buffer OPEX & Ecology</h4>
-                    <span className="eco-subtitle">{currentTree.name}</span>
-                  </div>
-                </div>
-                <div className="eco-card-metric text-emerald">
-                  <span className="currency">$</span>
-                  <span className="amount">{treeMaintCost.toLocaleString()}</span>
-                  <small>/year</small>
-                </div>
-                <div className="eco-stat-list">
-                  <div className="eco-stat-item">
-                    <span>Planted Buffer Depth & Area:</span>
-                    <strong>{treeBufferDepth}m ({treeAreaSqM} m²)</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Estimated Tree Count:</span>
-                    <strong>{treeCount} Trees (3m spacing)</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Annual Water Footprint:</span>
-                    <strong>{treeWaterGal.toLocaleString()} Gallons/yr</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Carbon Sequestration Offset:</span>
-                    <strong>-{treeCo2Seq.toLocaleString()} kg CO₂/yr</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Irrigation Requirement:</span>
-                    <strong>{currentTree.annualWaterGallonsPerAcre === 0 ? "Rain-Sustained (0 Irrigation)" : "Low Drip Xeriscape"}</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Regulatory & Shutdown Risk Avoidance */}
-              <div className="eco-detail-card highlight-border">
-                <div className="eco-card-header">
-                  <span className="eco-icon">⚖️</span>
-                  <div>
-                    <h4>Statutory Risk & Fine Avoidance</h4>
-                    <span className="eco-subtitle">Loudoun County Zoning Board / Municipal Ordinance</span>
-                  </div>
-                </div>
-                <div className="eco-card-metric text-sky">
-                  <span className="currency">$</span>
-                  <span className="amount">{(annualAvoidedFines / 1000000).toFixed(2)}M</span>
-                  <small>/year</small>
-                </div>
-                <div className="eco-stat-list">
-                  <div className="eco-stat-item">
-                    <span>Daily Violation Injunction Fine:</span>
-                    <strong>$25,000 / day</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Class-Action Settlement Reserve Saved:</span>
-                    <strong>${(litigationReserveSaved / 1000000).toFixed(1)} Million</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Total Acoustic CAPEX Required:</span>
-                    <strong>${totalCapexInvested.toLocaleString()}</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Financial Payback Period:</span>
-                    <strong>{results.isCompliant ? "< 18 Days" : "Non-Compliant"}</strong>
-                  </div>
-                  <div className="eco-stat-item">
-                    <span>Facility Permit Approval Risk:</span>
-                    <strong className={results.isCompliant ? "text-emerald" : "text-rose"}>
-                      {results.isCompliant ? "Low (Full Clearance)" : "Critical (Permit Revocation)"}
-                    </strong>
+                  <div className="thermo-col">
+                    <h4>Why Chillers Must Sit Outdoors</h4>
+                    <p>
+                      A 50 MW data center requires moving over 500,000 CFM of air across condenser coils. Condenser fans cannot operate inside sealed buildings without asphyxiating the cooling plant in its own exhaust heat.
+                    </p>
+                    <p>
+                      Placing chillers in plain sight near residential boundaries causes noise violations. HushGrid lets engineers position chillers in <strong>building-shielded rear yards</strong>, <strong>semi-bermed basins</strong>, or <strong>subterranean vaults</strong> with evergreen acoustic buffers before breaking ground.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
-          </section>
-        )}
+          )}
 
-        {/* =========================================================================
-            SECTION 5: OCTAVE-BAND FREQUENCY SPECTRUM
-            ========================================================================= */}
-        {(activeReportTab === "all" || activeReportTab === "octave") && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">05</span>
-              <div>
-                <h3 className="section-title">Octave-Band Frequency Spectrum Analysis (63 Hz – 8,000 Hz)</h3>
-                <p className="section-sub">Standard 1/1 octave transmission loss evaluation comparing unweighted dBL, A-weighting (dBA), and low-frequency C-weighting (dBC)</p>
-              </div>
-            </div>
-
-            <div className="table-wrapper-card">
-              <table className="clean-report-table">
-                <thead>
-                  <tr>
-                    <th>Octave Band</th>
-                    <th>Chiller Source (Lw)</th>
-                    <th>Distance Spreading</th>
-                    <th>Air Absorption</th>
-                    <th>Barrier TL</th>
-                    <th>Tree Buffer</th>
-                    <th>Receptor (dBL)</th>
-                    <th>A-Weighting (dBA)</th>
-                    <th>C-Weighting (dBC)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {octaveData.map((row) => (
-                    <tr key={row.freq} className={row.freq === 125 ? "table-row-highlight" : ""}>
-                      <td>
-                        <strong>{row.label}</strong>
-                        {row.freq === 125 && <span className="tone-indicator">★ Fundamental Chiller Tone</span>}
-                      </td>
-                      <td>{row.sourceLw.toFixed(1)} dB</td>
-                      <td>-{row.geomLoss.toFixed(1)} dB</td>
-                      <td>-{row.airLoss.toFixed(1)} dB</td>
-                      <td>-{row.wallLoss.toFixed(1)} dB</td>
-                      <td>-{row.vegLoss.toFixed(1)} dB</td>
-                      <td><strong>{row.unweightedLp.toFixed(1)} dB</strong></td>
-                      <td>
-                        <strong className={row.aWeightedLp > 35 ? "text-rose" : "text-emerald"}>
-                          {row.aWeightedLp.toFixed(1)} dBA
-                        </strong>
-                      </td>
-                      <td>
-                        <strong className="text-indigo">
-                          {row.cWeightedLp.toFixed(1)} dBC
-                        </strong>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="octave-notes-box">
-              <p>
-                <strong>📌 Acoustic Engineering Note on Low-Frequency Hum (63 Hz & 125 Hz):</strong> Screw compressors and 2-pole motors generate tonal energy at 60 Hz, 120 Hz, and 125 Hz. While standard A-weighting discounts these low frequencies by -16.1 dB to mimic human ear perception, low-frequency pressure waves easily penetrate double-pane residential glass and induce structural resonance in drywall. HushGrid tracks both <strong>dBA</strong> and <strong>dBC</strong> to guarantee zero sleep disturbance.
-              </p>
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================================
-            SECTION 6: THERMODYNAMIC HEAT REJECTION INSIGHT
-            ========================================================================= */}
-        {activeReportTab === "all" && (
-          <section className="report-section">
-            <div className="section-title-wrap">
-              <span className="section-num">06</span>
-              <div>
-                <h3 className="section-title">Thermodynamic Heat Rejection Architecture (2nd Law)</h3>
-                <p className="section-sub">Why hyperscale chillers must be situated outdoors and rejected into the atmosphere</p>
-              </div>
-            </div>
-
-            <div className="thermo-card-white">
-              <div className="thermo-card-grid">
-                <div className="thermo-col">
-                  <h4>The Silicon-to-Atmosphere Thermal Cycle</h4>
-                  <p>
-                    A 50-megawatt hyperscale data center consumes electricity to drive billions of transistors. Under the <strong>1st and 2nd Laws of Thermodynamics</strong>, 100% of that electrical energy degrades into thermal heat. To prevent processor junction temperatures from exceeding 85°C, cold chilled water loops (7°C supply / 12°C return) circulate through server rows.
-                  </p>
-                  <p>
-                    Because heat naturally flows only from hot bodies to cold bodies, mechanical chillers use refrigeration cycles (evaporator, compressor, condenser, expansion valve) to lift low-temperature heat from server rooms and dump it into hot summer air.
-                  </p>
-                </div>
-                <div className="thermo-col">
-                  <h4>Why Outdoor Air-Cooled Condensers Are Required</h4>
-                  <p>
-                    Air-cooled chillers require massive airflow (often &gt; 500,000 CFM) across finned aluminum condenser coils to reject tens of megawatts. This necessitates <strong>massive 2-meter diameter axial fan arrays</strong> mounted outdoors where outdoor air is unrestricted.
-                  </p>
-                  <p>
-                    In dense hyperscale clusters like <strong>Loudoun County, VA ("Data Center Alley")</strong>, placing chillers on the side of a building facing residential property lines triggers immediate noise violation citations. HushGrid enables operators to simulate <strong>Building-Shielded Rear Yards, Subterranean Vaults, and Native Evergreen Screens</strong> prior to physical construction.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Footer Certification Stamp */}
-      <footer className="report-footer-signoff">
-        <div className="signoff-left">
-          <div className="cert-stamp">
-            <span className="stamp-title">HUSHGRID SIMULATION ENGINE</span>
-            <span className="stamp-sub">VERIFIED DIGITAL TWIN</span>
-            <span className="stamp-code">ISO 9613-2 COMPLIANT</span>
-          </div>
-          <div className="signoff-text">
-            <strong>Certified by HushGrid Computational Acoustic Solver v2.4</strong>
-            <p>Calculations conform to ISO 9613-2 (Acoustics - Attenuation of sound during propagation outdoors) and ASHRAE TC 9.9 standards.</p>
-          </div>
-        </div>
-        <div className="signoff-right">
-          <button className="secondary-print-btn" onClick={handlePrint}>
-            🖨️ Export Certified PDF
-          </button>
-        </div>
-      </footer>
         </div>
       </div>
     </div>
