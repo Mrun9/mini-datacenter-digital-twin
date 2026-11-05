@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES, CHILLER_PLACEMENTS } from "../simulation/datacenterSites.js";
 import { calculateEnergyMetrics } from "../simulation/energy.js";
+import { evaluateSiteAcoustics } from "../simulation/acoustics.js";
 
 const OCTAVE_BANDS = [
   { freq: 63, label: "63 Hz", aWeight: -26.2, cWeight: -0.8, airAbsPer100m: 0.05, sourceRel: -3 },
@@ -36,36 +37,33 @@ export default function AcousticEngineeringReport({
     municipalNoiseLimitDba: 45,
   };
   const config = propConfig || {};
-  const results = propResults || {
-    sourceLw: 108.0,
-    unmitigatedLp: 55.0,
-    netReceivedLp: 29.2,
-    netReceivedLpC: 38.7,
-    lowFreqExcess: 9.5,
-    marginDb: 15.8,
-    isCompliant: true,
-    complianceStatus: "Compliant",
-    statusColor: "#059669",
-    activeLegalLimit: 45,
-    backgroundNoiseFloor: 32,
-    breakdown: {
-      geometricDecay: 61.1,
-      terrainEchoDb: 0,
-      inversionEffect: 1.8,
-      placementAttenuation: 18.0,
-      wallAttenuation: 10.8,
-      treeAttenuation: 6.5,
-      directivityAttenuation: 4.5,
-      totalMitigationDb: 39.8,
-    },
-    economics: {
-      wallCostEstimate: 104400,
-      wallEmbodiedCarbonKg: 27360,
-      treeAnnualMaintenanceCost: 300,
-      treeAnnualWaterGallons: 15000,
-      treeAnnualCo2Kg: 5984,
-    },
-  };
+
+  const distanceM = config.distanceMeters || site.defaultDistanceToHomesMeters || 320;
+
+  // Dynamically evaluate site acoustics based on live configuration (walls, trees, placement, distance)
+  const results = useMemo(() => {
+    return evaluateSiteAcoustics({
+      itPowerKw,
+      ambientTempC: site.ambientTempC,
+      fanSpeedPercent,
+      distanceToHomesMeters: distanceM,
+      municipalNoiseLimitDba: site.municipalNoiseLimitDba,
+      daytimeNoiseLimitDba: site.daytimeNoiseLimitDba || 55,
+      timeOfDay,
+      terrainEchoDb: site.terrainEchoAmplificationDb || 0,
+      chillerPlacement: config.placement || "side_exposed",
+      wallHeightMeters: config.wallHeightMeters || 8,
+      wallMaterial: config.wallMaterial || "absorptive_metal",
+      wallEnabled: Boolean(config.wallEnabled),
+      wallEnclosure: config.wallEnclosure || "single_east",
+      treeBufferDepthMeters: config.treeBufferDepthMeters || 25,
+      treeSpeciesId: config.treeSpeciesId || "virginia_pine",
+      treeEnabled: Boolean(config.treeEnabled),
+      treeArrangement: config.treeArrangement || "east_buffer",
+      chillerOrientationAngle: config.chillerOrientationAngle || 0,
+      acousticSilencers: Boolean(config.acousticSilencers),
+    });
+  }, [itPowerKw, site, fanSpeedPercent, config, distanceM, timeOfDay]);
 
   const currentWall = WALL_MATERIALS[config.wallMaterial] || WALL_MATERIALS.absorptive_metal;
   const currentTree = REGIONAL_TREE_SPECIES[config.treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
@@ -80,8 +78,6 @@ export default function AcousticEngineeringReport({
     siteId: site.id,
     timeOfDay,
   });
-
-  const distanceM = site.defaultDistanceToHomesMeters || 320;
   const wallDistSourceM = 15;
   const wallDistRecM = Math.max(10, distanceM - wallDistSourceM);
 
@@ -299,7 +295,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                       </tr>
                       <tr>
                         <td>Acoustic Barrier Wall</td>
-                        <td className="desc-cell">{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name}` : "None"}</td>
+                        <td className="desc-cell">{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name} (${currentWall.soundDropLabel})` : "None"}</td>
                         <td className="val-cell minus">−{results.breakdown?.wallAttenuation} dB</td>
                       </tr>
                       <tr>
@@ -341,7 +337,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                     <div className="min-cost-box">
                       <span className="cost-label">WALL CAPEX</span>
                       <strong className="cost-val">${wallCost.toLocaleString()}</strong>
-                      <span className="cost-sub">{wallArea} m² ({config.wallHeightMeters || 8}m high {currentWall.name})</span>
+                      <span className="cost-sub">{wallArea} m² ({config.wallHeightMeters || 8}m high {currentWall.shortName || currentWall.name} · {currentWall.typicalThickness})</span>
                     </div>
 
                     <div className="min-cost-box">
@@ -447,8 +443,8 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                       <strong>2.86 meters</strong>
                     </div>
                     <div className="step-row">
-                      <span>Material NRC ({currentWall.name}):</span>
-                      <strong>NRC {currentWall.nrcRating} (+{currentWall.nrcRating >= 0.8 ? "2.5" : "1.0"} dB)</strong>
+                      <span>Material Properties ({currentWall.name}):</span>
+                      <strong>NRC {currentWall.nrcRating} · TL {currentWall.transmissionLossDb} dB ({currentWall.soundDropLabel})</strong>
                     </div>
                     <div className="step-row total-step">
                       <span>Barrier Insertion Loss:</span>

@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../simulation/datacenterSites.js";
 import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 import { calculateEnergyMetrics } from "../simulation/energy.js";
+import { evaluateSiteAcoustics } from "../simulation/acoustics.js";
 
 /**
  * Camera Navigation with Smooth Orbit and Pan
@@ -658,30 +659,43 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
   const rot = ((item.rotation || 0) * Math.PI) / 180;
   const materialConfig = WALL_MATERIALS[item.material] || WALL_MATERIALS.absorptive_metal;
   const isTransparent = item.material === "transparent_acrylic";
+  const isGreen = item.material?.startsWith("green_wall");
+  const isMasonry = item.material === "masonry_brick";
+  const isSteel = item.material === "steel_aluminum";
+  const isThickConcrete = item.material === "concrete_thick";
+
+  // Wall physical thickness in 3D:
+  // Standard 4" ~ 0.45m, 4.5"+ low-freq / masonry ~ 0.58m, living wall with cassettes ~ 0.72m
+  const wallThickness = isGreen ? 0.72 : isMasonry || isThickConcrete ? 0.58 : 0.45;
 
   const dimensionTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 300;
-    canvas.height = 70;
+    canvas.width = 380;
+    canvas.height = 76;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
     if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 300, 70, 10);
+      ctx.roundRect(0, 0, 380, 76, 12);
     } else {
-      ctx.rect(0, 0, 300, 70);
+      ctx.rect(0, 0, 380, 76);
     }
     ctx.fill();
-    ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+    ctx.strokeStyle = isSelected ? "#38bdf8" : materialConfig.color;
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.font = "bold 26px monospace";
+    ctx.font = "bold 20px monospace";
     ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
-    ctx.fillText(`WALL: H = ${height}.0m`, 150, 44);
+    const titleText = `${materialConfig.shortName || "WALL"}: H = ${height}.0m`;
+    ctx.fillText(titleText, 190, 34);
+
+    ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = isSelected ? "#bae6fd" : "#34d399";
+    ctx.fillText(materialConfig.soundDropLabel ? `📉 ${materialConfig.soundDropLabel}` : "Acoustic Barrier", 190, 58);
 
     return new CanvasTexture(canvas);
-  }, [height, isSelected]);
+  }, [height, isSelected, materialConfig]);
 
   useEffect(() => () => dimensionTexture.dispose(), [dimensionTexture]);
 
@@ -695,27 +709,51 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
         onPointerDown(item.id, e);
       }}
     >
-      {isSelected && <SelectionRing radius={length / 2 + 2} label="WALL · DRAGGABLE" />}
+      {isSelected && (
+        <SelectionRing
+          radius={length / 2 + 2}
+          label={`${(materialConfig.shortName || "WALL").toUpperCase()} · DRAGGABLE`}
+        />
+      )}
 
+      {/* Main Structural Barrier Slab */}
       <mesh position={[0, height / 2, 0]}>
-        <boxGeometry args={[0.55, height, length]} />
+        <boxGeometry args={[wallThickness, height, length]} />
         <meshStandardMaterial
           color={isSelected ? "#0284c7" : materialConfig.color}
-          roughness={isTransparent ? 0.05 : 0.6}
-          metalness={item.material === "absorptive_metal" ? 0.7 : 0.1}
+          roughness={isTransparent ? 0.05 : isGreen ? 0.88 : isMasonry ? 0.8 : 0.55}
+          metalness={isSteel ? 0.85 : item.material === "absorptive_metal" ? 0.65 : 0.08}
           transparent={isTransparent}
           opacity={isTransparent ? 0.45 : 1.0}
         />
       </mesh>
 
+      {/* Steel H-Beam Foundation Posts */}
       {[-12, -6, 0, 6, 12].map((z) => (
-        <mesh key={z} position={[0.3, height / 2, z]}>
-          <boxGeometry args={[0.35, height + 0.3, 0.35]} />
+        <mesh key={z} position={[wallThickness / 2 + 0.08, height / 2, z]}>
+          <boxGeometry args={[0.26, height + 0.3, 0.26]} />
           <meshStandardMaterial color="#0f172a" metalness={0.9} />
         </mesh>
       ))}
 
-      <sprite position={[0, height + 1.8, 0]} scale={[6.0, 1.4, 1]}>
+      {/* Living Wall Biophilic Folige Cassettes & Planter Rail */}
+      {isGreen && (
+        <>
+          <mesh position={[0, height + 0.12, 0]}>
+            <boxGeometry args={[wallThickness + 0.15, 0.24, length + 0.2]} />
+            <meshStandardMaterial color="#14532d" roughness={0.7} />
+          </mesh>
+          {[-8, -2, 4, 10].map((z) => (
+            <mesh key={`green_cassette_${z}`} position={[wallThickness / 2 + 0.06, height * 0.48, z]}>
+              <boxGeometry args={[0.12, height * 0.72, 3.2]} />
+              <meshStandardMaterial color="#16a34a" roughness={0.95} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {/* Dimension & Noise Reduction Floating Sprite */}
+      <sprite position={[0, height + 1.9, 0]} scale={[6.6, 1.45, 1]}>
         <spriteMaterial map={dimensionTexture} depthTest={false} />
       </sprite>
     </group>
@@ -911,6 +949,7 @@ export default function AcousticSiteSandbox3D({
   timeOfDay = "night",
   onChangeTimeOfDay,
   onOpenReport,
+  onUpdateConfig,
 }) {
   const [navMode, setNavMode] = useState("orbit");
   const [cameraPreset, setCameraPreset] = useState("reset");
@@ -1067,19 +1106,43 @@ export default function AcousticSiteSandbox3D({
     setIsDragging(null);
   };
 
-  const handleAddWall = () => {
+  // Add Wall Modal State & Handlers
+  const [isAddWallModalOpen, setIsAddWallModalOpen] = useState(false);
+  const [selectedWallTypeToAdd, setSelectedWallTypeToAdd] = useState("absorptive_metal");
+  const [newWallHeight, setNewWallHeight] = useState(8);
+  const [newWallLength, setNewWallLength] = useState(28);
+
+  const handleOpenAddWallModal = () => {
+    setIsAddWallModalOpen(true);
+  };
+
+  const handleCloseAddWallModal = () => {
+    setIsAddWallModalOpen(false);
+  };
+
+  const handleConfirmAddWall = (typeOverride, heightOverride, lengthOverride) => {
+    const chosenType = typeOverride || selectedWallTypeToAdd || "absorptive_metal";
+    const chosenHeight = heightOverride || newWallHeight || 8;
+    const chosenLength = lengthOverride || newWallLength || 28;
+
     const newWall = {
       id: `wall_${Date.now()}`,
       type: "wall",
       x: -10,
-      z: (Math.random() - 0.5) * 24,
-      height: 8,
-      length: 28,
+      z: (Math.random() - 0.5) * 20,
+      height: chosenHeight,
+      length: chosenLength,
       rotation: 0,
-      material: "absorptive_metal",
+      material: chosenType,
     };
     setLayoutItems((prev) => [...prev, newWall]);
     setSelectedId(newWall.id);
+    setIsAddWallModalOpen(false);
+  };
+
+  // Backwards-compatible quick add
+  const handleAddWall = () => {
+    handleOpenAddWallModal();
   };
 
   const handleAddTrees = () => {
@@ -1122,87 +1185,90 @@ export default function AcousticSiteSandbox3D({
 
   const selectedItem = layoutItems.find((i) => i.id === selectedId);
 
-  // REAL-TIME ACOUSTIC CALCULATION
-  const acousticResults = useMemo(() => {
-    const tempPenalty = Math.max(0, (site.ambientTempC - 20) * 0.4);
-    const fanRatio = Math.max(0.2, fanSpeedPercent / 100);
-    const fanSpeedPenalty = 18 * Math.log10(fanRatio / 0.75);
-    const powerScale = 10 * Math.log10(Math.max(100, itPowerKw) / 500);
-    const baseLw = 108.0;
-    const sourceLw = baseLw + tempPenalty + fanSpeedPenalty + powerScale;
+  // Synthesize up-to-date site configuration from 3D scene elements
+  const effectiveConfig = useMemo(() => {
+    const hasWalls = walls.length > 0;
+    const maxWallHeight = hasWalls ? Math.max(...walls.map((w) => w.height || 8)) : 0;
+    // Prefer the material of the currently selected wall if a wall is selected, else primary wall
+    const activeWall = (selectedId && walls.find((w) => w.id === selectedId)) || walls[0];
+    const wallMaterial = activeWall?.material || "absorptive_metal";
+    const wallEnclosure =
+      walls.length >= 3 ? "full_4side" : walls.length === 2 ? "u_shape" : "single_east";
+
+    const hasTrees = treeClusters.length > 0;
+    const totalTreeDepth = hasTrees
+      ? treeClusters.reduce((sum, t) => sum + (t.depth || 16), 0)
+      : 0;
+    const primaryTree = treeClusters[0];
+    const treeSpeciesId =
+      primaryTree?.speciesId || site.recommendedTreeId || "virginia_pine";
+    const treeArrangement =
+      treeClusters.length >= 2 ? "perimeter_ring" : "east_buffer";
 
     const dx = probe.x - chiller.x;
     const dz = probe.z - chiller.z;
     const sceneDist = Math.hypot(dx, dz);
-    const distanceMeters = Math.max(15, Math.round((sceneDist / 28) * site.defaultDistanceToHomesMeters));
-    const distanceDecay = 20 * Math.log10(distanceMeters) + 11;
-
-    let buildingShieldingDb = 0;
-    if (chiller.x > 14 && probe.x < -10) {
-      buildingShieldingDb = 17.5;
-    }
-
-    let placementAttenDb = 0;
-    if (chiller.placement === "underground") placementAttenDb = 28.0;
-    else if (chiller.placement === "semi_berm") placementAttenDb = 11.5;
-    else if (chiller.placement === "rear_shielded") placementAttenDb = 18.0;
-
-    let wallAttenDb = 0;
-    const minX = Math.min(chiller.x, probe.x);
-    const maxX = Math.max(chiller.x, probe.x);
-
-    walls.forEach((w) => {
-      if (w.x > minX && w.x < maxX && Math.abs(w.z - (chiller.z + probe.z) / 2) < (w.length || 28) / 2 + 8) {
-        const mat = WALL_MATERIALS[w.material] || WALL_MATERIALS.absorptive_metal;
-        const thisWallDb = 4.2 + (w.height || 8) * 1.1 + (mat.nrcRating || 0.95) * 2.8;
-        wallAttenDb += thisWallDb;
-      }
-    });
-    wallAttenDb = Math.min(24.0, wallAttenDb);
-
-    let treeAttenDb = 0;
-    treeClusters.forEach((t) => {
-      if (t.x > minX && t.x < maxX && Math.abs(t.z - (chiller.z + probe.z) / 2) < (t.depth || 16) + 10) {
-        const spec = REGIONAL_TREE_SPECIES[t.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
-        const thisTreeDb = (t.depth || 16) * (spec.acousticAbsorptionCoeff || 0.18) * 2.0;
-        treeAttenDb += thisTreeDb;
-      }
-    });
-    treeAttenDb = Math.min(14.0, treeAttenDb);
-
-    const silencerDb = chiller.silencers ? 5.5 : 0;
-    const directivityDb = (chiller.rotation || 0) >= 135 ? 4.0 : 0;
-    const inversionDb = timeOfDay === "night" ? 1.8 : -1.2;
-    const terrainEchoDb = site.terrainEchoAmplificationDb || 0;
-
-    const totalMitigationDb =
-      distanceDecay +
-      buildingShieldingDb +
-      placementAttenDb +
-      wallAttenDb +
-      treeAttenDb +
-      silencerDb +
-      directivityDb -
-      inversionDb -
-      terrainEchoDb;
-
-    const netReceivedLp = Math.max(25, sourceLw - totalMitigationDb);
-    const activeLimit =
-      timeOfDay === "day"
-        ? site.daytimeNoiseLimitDba || 55
-        : site.municipalNoiseLimitDba;
-    const isCompliant = netReceivedLp <= activeLimit;
+    const distanceMeters = Math.max(
+      15,
+      Math.round((sceneDist / 28) * site.defaultDistanceToHomesMeters)
+    );
 
     return {
-      sourceLw: Math.round(sourceLw * 10) / 10,
-      netReceivedLp: Math.round(netReceivedLp * 10) / 10,
+      placement: chiller.placement || "side_exposed",
+      acousticSilencers: Boolean(chiller.silencers),
+      chillerOrientationAngle: chiller.rotation || 0,
+      wallEnabled: hasWalls,
+      wallHeightMeters: maxWallHeight,
+      wallMaterial,
+      wallEnclosure,
+      treeEnabled: hasTrees,
+      treeBufferDepthMeters: totalTreeDepth,
+      treeSpeciesId,
+      treeArrangement,
       distanceMeters,
-      activeLimit,
-      isCompliant,
-      statusColor: isCompliant ? "#34d399" : "#ef4444",
-      statusText: isCompliant ? "COMPLIANT" : "EXCEEDS LIMIT",
+      walls,
+      treeClusters,
     };
-  }, [chiller, probe, walls, treeClusters, site, fanSpeedPercent, itPowerKw, timeOfDay]);
+  }, [walls, treeClusters, chiller, probe, site]);
+
+  // Synchronize 3D layout state upstream to App and Dashboard
+  useEffect(() => {
+    if (onUpdateConfig) {
+      onUpdateConfig(effectiveConfig);
+    }
+  }, [effectiveConfig, onUpdateConfig]);
+
+  // REAL-TIME ACOUSTIC CALCULATION USING ISO 9613-2 ENGINE
+  const acousticResults = useMemo(() => {
+    const evaluation = evaluateSiteAcoustics({
+      itPowerKw,
+      ambientTempC: site.ambientTempC,
+      fanSpeedPercent,
+      distanceToHomesMeters: effectiveConfig.distanceMeters,
+      municipalNoiseLimitDba: site.municipalNoiseLimitDba,
+      daytimeNoiseLimitDba: site.daytimeNoiseLimitDba || 55,
+      timeOfDay,
+      terrainEchoDb: site.terrainEchoAmplificationDb,
+      chillerPlacement: effectiveConfig.placement,
+      wallHeightMeters: effectiveConfig.wallHeightMeters,
+      wallMaterial: effectiveConfig.wallMaterial,
+      wallEnabled: effectiveConfig.wallEnabled,
+      wallEnclosure: effectiveConfig.wallEnclosure,
+      treeBufferDepthMeters: effectiveConfig.treeBufferDepthMeters,
+      treeSpeciesId: effectiveConfig.treeSpeciesId,
+      treeEnabled: effectiveConfig.treeEnabled,
+      treeArrangement: effectiveConfig.treeArrangement,
+      chillerOrientationAngle: effectiveConfig.chillerOrientationAngle,
+      acousticSilencers: effectiveConfig.acousticSilencers,
+    });
+
+    return {
+      ...evaluation,
+      distanceMeters: effectiveConfig.distanceMeters,
+      activeLimit: evaluation.activeLegalLimit,
+      statusText: evaluation.isCompliant ? "COMPLIANT" : "EXCEEDS LIMIT",
+    };
+  }, [itPowerKw, site, fanSpeedPercent, timeOfDay, effectiveConfig]);
 
   // Live facility energy, cooling power, PUE, and carbon calculation
   const energyMetrics = useMemo(() => {
@@ -1210,12 +1276,12 @@ export default function AcousticSiteSandbox3D({
       itPowerKw,
       ambientTempC: site.ambientTempC,
       fanSpeedPercent,
-      chillerPlacement: chiller.placement,
-      silencers: chiller.silencers,
+      chillerPlacement: effectiveConfig.placement,
+      silencers: effectiveConfig.acousticSilencers,
       siteId: site.id,
       timeOfDay,
     });
-  }, [itPowerKw, site, fanSpeedPercent, chiller.placement, chiller.silencers, timeOfDay]);
+  }, [itPowerKw, site, fanSpeedPercent, effectiveConfig.placement, effectiveConfig.acousticSilencers, timeOfDay]);
 
   // Live Sound Wave Isophone Radii
   const isophoneRadii = useMemo(() => {
@@ -1248,51 +1314,61 @@ export default function AcousticSiteSandbox3D({
 
   return (
     <div className="canvas-interactive-wrapper" style={{ position: "relative", width: "100%", height: "720px" }}>
-      {/* 1. CLEAN FLOATING TOP HEADER */}
-      <div className="clean-floating-top-bar">
-        <div className="top-site-badge">
-          <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
-          <span className="top-site-name">{site.name}</span>
+      {/* 1. CLEAN FLOATING VERTICAL CONTROLS DOCK (LEFT SIDE) */}
+      <div className="clean-floating-vertical-dock">
+        <div className="vertical-site-badge">
+          <div className="badge-title-row">
+            <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
+            <span className="top-site-name">{site.name}</span>
+          </div>
           <span className="top-site-tag">300M 360° SPATIAL TWIN</span>
         </div>
 
-        <div className="top-time-toggle">
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">SIMULATION TIME</span>
+          <div className="vertical-time-toggle">
+            <button
+              className={`time-toggle-btn ${!isNight ? "active" : ""}`}
+              onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+            >
+              ☀️ Day
+            </button>
+            <button
+              className={`time-toggle-btn ${isNight ? "active" : ""}`}
+              onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
+            >
+              🌙 Night
+            </button>
+          </div>
+        </div>
+
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">AUDIO RECEPTOR</span>
           <button
-            className={`time-toggle-btn ${!isNight ? "active" : ""}`}
-            onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+            className={`vertical-audio-btn ${audioPlaying ? "playing" : ""}`}
+            onClick={toggleAudio}
+            title="Click to hear synthesized noise at neighbor's property"
           >
-            ☀️ Day
-          </button>
-          <button
-            className={`time-toggle-btn ${isNight ? "active" : ""}`}
-            onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
-          >
-            🌙 Night Curfew
+            {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
           </button>
         </div>
 
-        <button
-          className={`top-audio-btn ${audioPlaying ? "playing" : ""}`}
-          onClick={toggleAudio}
-          title="Click to hear synthesized noise at neighbor's property"
-        >
-          {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
-        </button>
-
-        {/* View Presets Bar */}
-        <div className="top-camera-group">
-          <button className="top-cam-btn" onClick={() => setCameraPreset("reset")} title="Expansive 300m Bird's-Eye View">
-            ↺ 300m Campus
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("feature")} title="Focus on site-specific primary feature">
-            {site.id === "the_dalles_or" ? "🌊 River & Canyon" : site.id === "phoenix_az" ? "🏜️ Canal & Desert" : site.id === "dublin_ie" ? "🛶 Grand Canal" : "🛣️ Highway"}
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("homes")} title="Focus on Neighborhood Receptors">
-            🏡 Homes
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D Map Plan View">
-            🗺️ 2D Plan
-          </button>
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">CAMERA PRESETS</span>
+          <div className="vertical-camera-group">
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("reset")} title="Expansive 300m Bird's-Eye View">
+              ↺ 300m Campus
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("feature")} title="Focus on site-specific primary feature">
+              {site.id === "the_dalles_or" ? "🌊 River & Canyon" : site.id === "phoenix_az" ? "🏜️ Canal & Desert" : site.id === "dublin_ie" ? "🛶 Grand Canal" : "🛣️ Highway"}
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("homes")} title="Focus on Neighborhood Receptors">
+              🏡 Homes
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D Map Plan View">
+              🗺️ 2D Plan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1532,6 +1608,20 @@ export default function AcousticSiteSandbox3D({
             <div className="inspector-content-row">
               <span className="inspector-title">🧱 Barrier Wall</span>
               <div className="inspector-actions">
+                <span className="inspector-label">Type:</span>
+                <select
+                  className="inspector-select"
+                  value={selectedItem.material || "absorptive_metal"}
+                  onChange={(e) => updateSelectedItem({ material: e.target.value })}
+                  title="Change barrier wall material & sound drop rating"
+                >
+                  {Object.values(WALL_MATERIALS).map((mat) => (
+                    <option key={mat.id} value={mat.id}>
+                      {mat.icon} {mat.shortName} ({mat.soundDropLabel})
+                    </option>
+                  ))}
+                </select>
+
                 <span className="inspector-label">Height:</span>
                 <button
                   className="inspector-step-btn"
@@ -1548,6 +1638,22 @@ export default function AcousticSiteSandbox3D({
                 >
                   +
                 </button>
+
+                {(() => {
+                  const curMat = WALL_MATERIALS[selectedItem.material] || WALL_MATERIALS.absorptive_metal;
+                  const wArea = (selectedItem.length || 28) * (selectedItem.height || 8);
+                  const wCost = Math.round(wArea * curMat.costPerSqMeter);
+                  return (
+                    <div className="inspector-badge-row">
+                      <span className="inspector-stat-pill drop" title="Rated sound drop">
+                        📉 {curMat.soundDropLabel}
+                      </span>
+                      <span className="inspector-stat-pill cost" title="Estimated section cost">
+                        💰 ${wCost.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <button
                   className="inspector-tool-btn"
@@ -1661,7 +1767,7 @@ export default function AcousticSiteSandbox3D({
 
         <div className="dock-divider"></div>
 
-        <button className="dock-btn primary" onClick={handleAddWall} title="Add a new sound barrier wall">
+        <button className="dock-btn primary" onClick={handleOpenAddWallModal} title="Add a new sound barrier wall (choose wall type & acoustic rating)">
           <span className="dock-icon">🧱</span>
           <span className="dock-label">+ Add Wall</span>
         </button>
@@ -1698,12 +1804,169 @@ export default function AcousticSiteSandbox3D({
         </button>
 
         {onOpenReport && (
-          <button className="dock-btn highlight" onClick={onOpenReport} title="Open detailed engineering link budget">
+          <button
+            className="dock-btn highlight"
+            onClick={() => onOpenReport(effectiveConfig)}
+            title="Open detailed engineering link budget"
+          >
             <span className="dock-icon">📊</span>
             <span className="dock-label">Pro Details</span>
           </button>
         )}
       </div>
+
+      {/* 6. ADD ACOUSTIC BARRIER WALL MODAL */}
+      {isAddWallModalOpen && (
+        <div className="report-modal-overlay animated-fadeIn" onClick={handleCloseAddWallModal}>
+          <div
+            className="wall-picker-modal-dialog animated-popIn"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="wall-picker-header">
+              <div className="wall-picker-title-row">
+                <span className="wall-picker-icon">🧱</span>
+                <div>
+                  <h3 className="wall-picker-title">Select Acoustic Barrier Wall Type</h3>
+                  <p className="wall-picker-subtitle">
+                    Select barrier material, sound drop rating, and thickness to automatically adjust site decibels and CAPEX
+                  </p>
+                </div>
+              </div>
+              <button className="wall-picker-close-btn" onClick={handleCloseAddWallModal} title="Close">
+                ✕
+              </button>
+            </div>
+
+            {/* Source Reference Banner */}
+            <div className="wall-picker-source-banner">
+              <span className="source-banner-icon">📖</span>
+              <div className="source-banner-text">
+                <strong>Empirical Industrial Noise Standards:</strong> Barrier sound drop ratings and frequency dampening specifications based on{" "}
+                <a
+                  href="https://www.lsars.com/data-center-noise"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="source-link"
+                >
+                  LSARS Data Center Noise Research (lsars.com/data-center-noise)
+                </a>
+              </div>
+            </div>
+
+            {/* Wall Types Selection Grid */}
+            <div className="wall-picker-grid">
+              {Object.values(WALL_MATERIALS).map((mat) => {
+                const isSelected = selectedWallTypeToAdd === mat.id;
+                return (
+                  <div
+                    key={mat.id}
+                    className={`wall-card-option ${isSelected ? "selected" : ""}`}
+                    onClick={() => setSelectedWallTypeToAdd(mat.id)}
+                  >
+                    <div className="wall-card-top">
+                      <span className="wall-card-icon">{mat.icon}</span>
+                      <div className="wall-card-headline">
+                        <h4 className="wall-card-name">{mat.name}</h4>
+                        <span className="wall-card-cat">{mat.category}</span>
+                      </div>
+                      <span className="wall-card-drop-badge">{mat.soundDropLabel}</span>
+                    </div>
+
+                    <p className="wall-card-desc">{mat.description}</p>
+
+                    <div className="wall-card-specs-row">
+                      <span className="spec-item">
+                        <strong>Thickness:</strong> {mat.typicalThickness}
+                      </span>
+                      <span className="spec-item">
+                        <strong>NRC:</strong> {mat.nrcRating}
+                      </span>
+                      <span className="spec-item">
+                        <strong>Unit Cost:</strong> ${mat.costPerSqMeter}/m²
+                      </span>
+                    </div>
+
+                    <div className="wall-card-freq-note">
+                      <small>💡 {mat.frequencyNote}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Config & Preview Strip */}
+            {(() => {
+              const activeMat = WALL_MATERIALS[selectedWallTypeToAdd] || WALL_MATERIALS.absorptive_metal;
+              const area = newWallLength * newWallHeight;
+              const cost = Math.round(area * activeMat.costPerSqMeter);
+              const carbon = Math.round(area * activeMat.embodiedCarbonKgPerSqMeter);
+
+              return (
+                <div className="wall-picker-footer-bar">
+                  <div className="wall-config-controls">
+                    <label className="config-control-label">
+                      <span>Height:</span>
+                      <select
+                        value={newWallHeight}
+                        onChange={(e) => setNewWallHeight(Number(e.target.value))}
+                        className="modal-select-ctrl"
+                      >
+                        {[4, 6, 8, 10, 12, 14, 16].map((h) => (
+                          <option key={h} value={h}>
+                            {h} meters ({Math.round(h * 3.28)} ft)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="config-control-label">
+                      <span>Length:</span>
+                      <select
+                        value={newWallLength}
+                        onChange={(e) => setNewWallLength(Number(e.target.value))}
+                        className="modal-select-ctrl"
+                      >
+                        {[20, 28, 36, 44].map((l) => (
+                          <option key={l} value={l}>
+                            {l} meters ({Math.round(l * 3.28)} ft)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="wall-live-preview-stats">
+                    <div className="stat-pill">
+                      <span>Sound Drop:</span>
+                      <strong className="text-emerald">📉 {activeMat.soundDropLabel}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>Estimated CAPEX:</span>
+                      <strong className="text-sky">💰 ${cost.toLocaleString()}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>CO₂ Footprint:</span>
+                      <strong className="text-amber">🌱 {carbon.toLocaleString()} kg</strong>
+                    </div>
+                  </div>
+
+                  <div className="wall-modal-action-btns">
+                    <button className="wall-modal-btn cancel" onClick={handleCloseAddWallModal}>
+                      Cancel
+                    </button>
+                    <button className="wall-modal-btn confirm" onClick={() => handleConfirmAddWall()}>
+                      Add Wall to Site 🧱
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
