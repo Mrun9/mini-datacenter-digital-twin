@@ -9,6 +9,7 @@ import LandingPage from "./components/LandingPage.jsx";
 import Footer from "./components/Footer.jsx";
 import AcousticControls from "./components/AcousticControls.jsx";
 import AcousticEngineeringReport from "./components/AcousticEngineeringReport.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import FleetComparisonView from "./components/FleetComparisonView.jsx";
 import ServerControls from "./components/ServerControls.jsx";
 import TemperatureChart from "./components/TemperatureChart.jsx";
@@ -222,15 +223,17 @@ export default function App() {
 
             {/* Modal Popup: Executive Acoustic Engineering Report (Lighter Whitepaper Background) */}
             {showReport && (
-              <AcousticEngineeringReport
-                site={activeSite}
-                config={activeConfig}
-                results={acousticResults}
-                fanSpeedPercent={fanSpeedPercent}
-                itPowerKw={itPowerKw}
-                timeOfDay={timeOfDay}
-                onClose={() => setShowReport(false)}
-              />
+              <ErrorBoundary onReset={() => setShowReport(false)}>
+                <AcousticEngineeringReport
+                  site={activeSite}
+                  config={activeConfig}
+                  results={acousticResults}
+                  fanSpeedPercent={fanSpeedPercent}
+                  itPowerKw={itPowerKw}
+                  timeOfDay={timeOfDay}
+                  onClose={() => setShowReport(false)}
+                />
+              </ErrorBoundary>
             )}
           </section>
         )}
