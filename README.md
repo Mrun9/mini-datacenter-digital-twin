@@ -61,11 +61,12 @@ Hyperscale AI data center noise pollution has emerged as a severe environmental,
 * **Grid Carbon Tracking:** Couples regional power grid emissions factors (PJM Loudoun: 385 gCO₂/kWh; Oregon BPA Hydro: 24 gCO₂/kWh) to quantify operational carbon footprints.
 
 ### 3. Multi-Site Fleet & "Follow-the-Moon" Workload Migration
-* **Compare 4 Real-World Sites:**
-  * **Loudoun County, VA:** Data Center Alley, flat terrain, strict 45 dBA nighttime residential curfew.
-  * **Phoenix, AZ:** 115°F summer heat stress, low air humidity, desert xeriscaping.
-  * **Columbia River Gorge, OR:** Canyon basalt cliff echoes (+4 dB reflection), 100% clean hydropower, 50 dBA limit.
-  * **Dublin, Ireland:** Maritime damp climate, conifer acoustic hedging, 40 dBA EU Environmental Noise limit.
+* **Simulate 5 Global Data Center Sites:**
+  * **Loudoun County, VA ("Data Center Alley"):** Flat suburban basin, strict 45 dBA nighttime residential curfew.
+  * **Chandler / Phoenix, AZ ("Desert Megawatt Corridor"):** 115°F summer heat stress, hardpan ground reflection, drought xeriscaping.
+  * **Columbia River Gorge, OR ("Canyon Hydro-Hub"):** Steep basalt cliff echoes (+4.5 dB reflection), 100% clean hydropower, 45 dBA night limit.
+  * **Kildare / Dublin, Ireland ("European Cloud Hub"):** Soft peat soil, maritime conifer hedging, strict 40 dBA EU Environmental Noise limit.
+  * **Custom Planned Site ("Greenfield Simulator"):** Fully configurable terrain, distance-to-boundary, microgrid carbon mix, and custom plant layout for planning brand-new data center developments.
 * **Autonomous Nocturnal Curfew Load Migration:** Automatically migrates compute load from Loudoun County at 10:00 PM (night noise curfew) to daylight or hydro-powered sites with underground chillers, maintaining global compute throughput 24/7 without violating municipal sleep ordinances.
 * **Fleet Telemetry Summary Bar:** Aggregates fleet-wide IT load, facility power, fleet average PUE, total grid carbon emissions, and load-shift dividend badges (e.g. `+14.2 dB Sleep Margin`, `-38.5% Carbon Abatement`, `+$24.80/hr Energy Savings`).
 
