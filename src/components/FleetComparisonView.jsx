@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { evaluateSiteAcoustics } from "../simulation/acoustics.js";
+import { calculateEnergyMetrics } from "../simulation/energy.js";
 
 export default function FleetComparisonView({
   sites,
@@ -38,13 +39,42 @@ export default function FleetComparisonView({
       chillerOrientationAngle: config.chillerOrientationAngle,
     });
 
+    const energy = calculateEnergyMetrics({
+      itPowerKw: effectivePower,
+      ambientTempC: site.ambientTempC,
+      fanSpeedPercent,
+      chillerPlacement: config.placement,
+      silencers: config.acousticSilencers || false,
+      siteId: site.id,
+    });
+
     return {
       site,
       config,
       evaluation,
+      energy,
       effectivePower,
     };
   });
+
+  // Global Fleet Aggregated Energy & Carbon Metrics
+  const totalFleetItKw = siteResults.reduce((acc, s) => acc + s.effectivePower, 0);
+  const totalFleetFacilityKw = siteResults.reduce((acc, s) => acc + s.energy.facilityPowerKw, 0);
+  const totalFleetCarbonKg = siteResults.reduce((acc, s) => acc + s.energy.hourlyCarbonKg, 0);
+  const totalFleetCost = siteResults.reduce((acc, s) => acc + s.energy.hourlyCostUsd, 0);
+  const fleetAvgPue = totalFleetFacilityKw / Math.max(1, totalFleetItKw);
+
+  // Carbon and cost impact of Follow-the-Moon load shifting:
+  // Baseline: Loudoun at normal itPowerKw, Oregon at normal itPowerKw
+  const loudounBaseline = calculateEnergyMetrics({ itPowerKw, siteId: "loudoun_va", ambientTempC: 22, fanSpeedPercent });
+  const oregonBaseline = calculateEnergyMetrics({ itPowerKw, siteId: "the_dalles_or", ambientTempC: 16, fanSpeedPercent });
+  const loudounShifted = calculateEnergyMetrics({ itPowerKw: 180, siteId: "loudoun_va", ambientTempC: 22, fanSpeedPercent });
+  const oregonShifted = calculateEnergyMetrics({ itPowerKw: 720, siteId: "the_dalles_or", ambientTempC: 16, fanSpeedPercent });
+
+  const shiftCarbonDeltaKg = (loudounBaseline.hourlyCarbonKg + oregonBaseline.hourlyCarbonKg) -
+                             (loudounShifted.hourlyCarbonKg + oregonShifted.hourlyCarbonKg);
+  const shiftCostDeltaUsd = (loudounBaseline.hourlyCostUsd + oregonBaseline.hourlyCostUsd) -
+                           (loudounShifted.hourlyCostUsd + oregonShifted.hourlyCostUsd);
 
   return (
     <div className="fleet-view-container animated-fadeIn">
@@ -84,19 +114,52 @@ export default function FleetComparisonView({
           <div className="shift-indicator">
             <span className="shift-dot"></span>
             <span>
-              <strong>Active Shifting:</strong> Throttling Loudoun, VA (180 kW) → Redirecting 540 kW non-urgent AI training to The Dalles, OR (720 kW)
+              <strong>Curfew Orchestration Active:</strong> Throttling Loudoun, VA (180 kW) → Redirecting 540 kW compute to The Dalles, OR (720 kW Hydro)
             </span>
           </div>
-          <div className="shift-sparkline">
-            <div className="sparkline-bar va-cut">VA: -57% IT Heat</div>
-            <div className="sparkline-bar or-boost">OR: +71% IT Power</div>
+          <div className="shift-dividend-badges">
+            <span className="dividend-pill green">
+              🌱 <strong>+{shiftCarbonDeltaKg.toFixed(0)} kg CO₂/h</strong> Avoided
+            </span>
+            <span className="dividend-pill blue">
+              💵 <strong>+${shiftCostDeltaUsd.toFixed(2)}/h</strong> Saved
+            </span>
+            <span className="dividend-pill purple">
+              🔇 <strong>Zero Curfew Violations</strong>
+            </span>
           </div>
         </div>
       )}
 
+      {/* Global Fleet Telemetry Summary Bar */}
+      <div className="fleet-telemetry-summary-bar">
+        <div className="summary-item">
+          <span className="summary-label">FLEET IT COMPUTE</span>
+          <strong className="summary-val">{totalFleetItKw.toFixed(0)} kW</strong>
+        </div>
+        <div className="summary-item">
+          <span className="summary-label">CAMPUS FACILITY POWER</span>
+          <strong className="summary-val">{totalFleetFacilityKw.toFixed(0)} kW</strong>
+        </div>
+        <div className="summary-item">
+          <span className="summary-label">FLEET AVG PUE</span>
+          <strong className="summary-val" style={{ color: fleetAvgPue <= 1.25 ? "#10b981" : "#f59e0b" }}>
+            {fleetAvgPue.toFixed(2)}
+          </strong>
+        </div>
+        <div className="summary-item">
+          <span className="summary-label">FLEET CARBON RATE</span>
+          <strong className="summary-val">{totalFleetCarbonKg.toFixed(1)} kg CO₂/h</strong>
+        </div>
+        <div className="summary-item">
+          <span className="summary-label">FLEET HOURLY OPEX</span>
+          <strong className="summary-val">${totalFleetCost.toFixed(2)}/h</strong>
+        </div>
+      </div>
+
       {/* Grid of Data Center Sites */}
       <div className="fleet-grid">
-        {siteResults.map(({ site, config, evaluation, effectivePower }) => {
+        {siteResults.map(({ site, config, evaluation, energy, effectivePower }) => {
           const isSelected = site.id === selectedSiteId;
           const limit = site.municipalNoiseLimitDba;
           const current = evaluation.netReceivedLp;
@@ -170,6 +233,26 @@ export default function FleetComparisonView({
                 <div>
                   <span>Active IT Load</span>
                   <strong style={{ color: "#38bdf8" }}>{effectivePower} kW</strong>
+                </div>
+              </div>
+
+              {/* Site Energy & Carbon Telemetry */}
+              <div className="fleet-energy-strip">
+                <div className="energy-mini-item">
+                  <span>Facility Power:</span>
+                  <b>{energy.facilityPowerKw.toFixed(0)} kW</b>
+                </div>
+                <div className="energy-mini-item">
+                  <span>PUE:</span>
+                  <b style={{ color: energy.pueColor }}>{energy.pue.toFixed(2)}</b>
+                </div>
+                <div className="energy-mini-item">
+                  <span>Cooling:</span>
+                  <b>{energy.coolingPowerKw.toFixed(0)} kW ({energy.coolingFractionPercent}%)</b>
+                </div>
+                <div className="energy-mini-item">
+                  <span>Carbon / Cost:</span>
+                  <b>{energy.hourlyCarbonKg.toFixed(0)} kg/h · ${energy.hourlyCostUsd.toFixed(1)}/h</b>
                 </div>
               </div>
 

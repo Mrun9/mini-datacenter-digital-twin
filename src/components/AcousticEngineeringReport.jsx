@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES, CHILLER_PLACEMENTS } from "../simulation/datacenterSites.js";
+import { calculateEnergyMetrics } from "../simulation/energy.js";
 
 const OCTAVE_BANDS = [
   { freq: 63, label: "63 Hz", aWeight: -26.2, cWeight: -0.8, airAbsPer100m: 0.05, sourceRel: -3 },
@@ -17,12 +18,13 @@ export default function AcousticEngineeringReport({
   site: propSite,
   config: propConfig,
   results: propResults,
+  energyMetrics: propEnergyMetrics,
   fanSpeedPercent = 75,
   itPowerKw = 500,
   timeOfDay = "night",
   onClose,
 }) {
-  const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard" | "formulas" | "octave" | "thermo"
+  const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard" | "formulas" | "octave" | "thermo" | "energy"
   const [copied, setCopied] = useState(false);
 
   const site = propSite || {
@@ -68,6 +70,16 @@ export default function AcousticEngineeringReport({
   const currentWall = WALL_MATERIALS[config.wallMaterial] || WALL_MATERIALS.absorptive_metal;
   const currentTree = REGIONAL_TREE_SPECIES[config.treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
   const currentPlacement = CHILLER_PLACEMENTS[config.placement] || CHILLER_PLACEMENTS.side_exposed;
+
+  const energy = propEnergyMetrics || calculateEnergyMetrics({
+    itPowerKw,
+    ambientTempC: site.ambientTempC,
+    fanSpeedPercent,
+    chillerPlacement: config.placement,
+    silencers: config.acousticSilencers || false,
+    siteId: site.id,
+    timeOfDay,
+  });
 
   const distanceM = site.defaultDistanceToHomesMeters || 320;
   const wallDistSourceM = 15;
@@ -221,6 +233,12 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
               onClick={() => setActiveTab("thermo")}
             >
               🔬 Thermodynamic Cycle
+            </button>
+            <button
+              className={`min-tab ${activeTab === "energy" ? "active" : ""}`}
+              onClick={() => setActiveTab("energy")}
+            >
+              ⚡ Energy & PUE
             </button>
           </nav>
 
@@ -576,7 +594,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
             </div>
           )}
 
-          {/* TAB 4: THERMODYNAMICS (ONLY 2ND LAW EXPLANATION, ZERO DUPLICATE CONTENT) */}
+          {/* TAB 4: THERMODYNAMICS */}
           {activeTab === "thermo" && (
             <div className="min-tab-content-scroll animated-fadeIn">
               <div className="thermo-card-white">
@@ -598,6 +616,128 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                     <p>
                       Placing chillers in plain sight near residential boundaries causes noise violations. HushGrid lets engineers position chillers in <strong>building-shielded rear yards</strong>, <strong>semi-bermed basins</strong>, or <strong>subterranean vaults</strong> with evergreen acoustic buffers before breaking ground.
                     </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: ENERGY, PUE & CARBON METRICS */}
+          {activeTab === "energy" && (
+            <div className="min-tab-content-scroll animated-fadeIn">
+              <div className="energy-report-container">
+                {/* Top KPI Cards Grid */}
+                <div className="energy-kpi-grid">
+                  <div className="energy-kpi-card">
+                    <span className="kpi-label">TOTAL CAMPUS FACILITY POWER</span>
+                    <strong className="kpi-number">{energy.facilityPowerKw.toFixed(1)} <small>kW</small></strong>
+                    <span className="kpi-sub">IT Load ({energy.itPowerKw} kW) + Cooling ({energy.coolingPowerKw} kW)</span>
+                  </div>
+
+                  <div className="energy-kpi-card" style={{ borderColor: `${energy.pueColor}66` }}>
+                    <span className="kpi-label">POWER USAGE EFFECTIVENESS (PUE)</span>
+                    <strong className="kpi-number" style={{ color: energy.pueColor }}>{energy.pue.toFixed(3)}</strong>
+                    <span className="kpi-badge" style={{ background: `${energy.pueColor}22`, color: energy.pueColor }}>
+                      {energy.pueRating}
+                    </span>
+                  </div>
+
+                  <div className="energy-kpi-card">
+                    <span className="kpi-label">CHILLER THERMODYNAMIC COP</span>
+                    <strong className="kpi-number">{energy.chillerCop.toFixed(2)}</strong>
+                    <span className="kpi-sub">Eff. Ambient: {energy.effectiveAmbientC}°C</span>
+                  </div>
+
+                  <div className="energy-kpi-card">
+                    <span className="kpi-label">REGIONAL GRID CARBON RATE</span>
+                    <strong className="kpi-number">{energy.hourlyCarbonKg.toFixed(1)} <small>kg CO₂/h</small></strong>
+                    <span className="kpi-sub">{energy.annualCarbonTons.toFixed(0)} metric tons/year ({energy.gridCarbonGramsPerKwh} g/kWh)</span>
+                  </div>
+
+                  <div className="energy-kpi-card">
+                    <span className="kpi-label">ESTIMATED ELECTRICITY OPEX</span>
+                    <strong className="kpi-number">${energy.hourlyCostUsd.toFixed(2)} <small>/hr</small></strong>
+                    <span className="kpi-sub">${energy.annualCostUsd.toLocaleString()}/yr @ ${energy.electricityPricePerKwh}/kWh</span>
+                  </div>
+                </div>
+
+                {/* Thermodynamic Energy Balance Table */}
+                <div className="energy-table-card">
+                  <h4>Facility Thermodynamic Energy Balance (ASHRAE / Green Grid Standard)</h4>
+                  <table className="energy-data-table">
+                    <thead>
+                      <tr>
+                        <th>Subsystem</th>
+                        <th>Power (kW)</th>
+                        <th>% of Campus Total</th>
+                        <th>Thermodynamic Role / Physics Formulation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>IT Compute Workload</strong></td>
+                        <td>{energy.itPowerKw.toFixed(1)} kW</td>
+                        <td><strong>{energy.itFractionPercent}%</strong></td>
+                        <td>Primary silicon computation heat generation ($P = IV$)</td>
+                      </tr>
+                      <tr>
+                        <td>Chiller Refrigeration Compressors</td>
+                        <td>{energy.chillerCompressorKw.toFixed(1)} kW</td>
+                        <td>{((energy.chillerCompressorKw / energy.facilityPowerKw) * 100).toFixed(1)}%</td>
+                        <td>Refrigerant lift pressure work: P_comp = P_IT / COP</td>
+                      </tr>
+                      <tr>
+                        <td>Condenser Airflow Fans</td>
+                        <td>{energy.condenserFanKw.toFixed(1)} kW</td>
+                        <td>{((energy.condenserFanKw / energy.facilityPowerKw) * 100).toFixed(1)}%</td>
+                        <td>Fan Affinity Law cubic power scaling (P ~ RPM³)</td>
+                      </tr>
+                      <tr>
+                        <td>Chilled Water Pumps & Hydronics</td>
+                        <td>{energy.pumpsKw.toFixed(1)} kW</td>
+                        <td>{((energy.pumpsKw / energy.facilityPowerKw) * 100).toFixed(1)}%</td>
+                        <td>Loop friction and static head circulation</td>
+                      </tr>
+                      <tr>
+                        <td>Electrical Transformation & Losses</td>
+                        <td>{energy.electricalLossesKw.toFixed(1)} kW</td>
+                        <td>{((energy.electricalLossesKw / energy.facilityPowerKw) * 100).toFixed(1)}%</td>
+                        <td>UPS inverter stages, transformers, and facility LED lighting (~4.2%)</td>
+                      </tr>
+                      <tr className="table-total-row">
+                        <td><strong>Total Facility Power</strong></td>
+                        <td><strong>{energy.facilityPowerKw.toFixed(1)} kW</strong></td>
+                        <td><strong>100.0%</strong></td>
+                        <td><strong>PUE = {energy.pue.toFixed(3)}</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Acoustic vs Energy Tradeoff Analysis */}
+                <div className="energy-tradeoff-card">
+                  <h4>Multi-Objective Optimization: Acoustics vs Energy</h4>
+                  <div className="tradeoff-two-col">
+                    <div className="tradeoff-box">
+                      <h5>1. Condenser Fan Affinity Law vs Sound Power</h5>
+                      <p>
+                        Acoustic noise scales with the 5th power of tip speed (Lw ~ 50 log10(RPM)), while fan electrical power scales cubically (P ~ RPM³). Throttling condenser fans from 100% to 75% duty slashes electrical fan power by <strong>58%</strong> and cuts sound power by <strong>2.2 dBA</strong>.
+                      </p>
+                      {energy.hourlyCostSavedUsd > 0 && (
+                        <div className="tradeoff-highlight">
+                          ✓ Operating at current fan speed saves <strong>${energy.hourlyCostSavedUsd.toFixed(2)}/hour</strong> (${(energy.hourlyCostSavedUsd * 8760).toLocaleString()}/year) and avoids <strong>{energy.hourlyCarbonSavedKg.toFixed(1)} kg CO₂/hour</strong> compared to full-blast operation.
+                        </div>
+                      )}
+                    </div>
+                    <div className="tradeoff-box">
+                      <h5>2. Subterranean Bunker Vault Thermal Buffering</h5>
+                      <p>
+                        Beyond eliminating line-of-sight sound waves (−28 dB), placing chillers in subterranean bunkers shields condenser coils from baking solar radiation and harnesses ground thermal inertia, maintaining lower effective condensing lift in peak summer weather.
+                      </p>
+                      <div className="tradeoff-highlight">
+                        Current Placement: <strong>{currentPlacement.name}</strong> ({currentPlacement.attenuationDb > 0 ? `-${currentPlacement.attenuationDb} dB attenuation` : "0 dB baseline"})
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

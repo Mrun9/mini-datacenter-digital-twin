@@ -3,6 +3,7 @@ import { Simulation } from "./simulation/Simulation.js";
 import { powerWatts, totalNoiseDba } from "./simulation/physics.js";
 import { DATA_CENTER_SITES } from "./simulation/datacenterSites.js";
 import { evaluateSiteAcoustics } from "./simulation/acoustics.js";
+import { calculateEnergyMetrics } from "./simulation/energy.js";
 
 import Header from "./components/Header.jsx";
 import LandingPage from "./components/LandingPage.jsx";
@@ -104,6 +105,19 @@ export default function App() {
     });
   }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, timeOfDay]);
 
+  // Real-time campus energy, thermodynamic cooling load, PUE, and carbon calculation
+  const energyMetrics = useMemo(() => {
+    return calculateEnergyMetrics({
+      itPowerKw,
+      ambientTempC: activeSite.ambientTempC,
+      fanSpeedPercent,
+      chillerPlacement: activeConfig.placement,
+      silencers: activeConfig.acousticSilencers || false,
+      siteId: selectedSiteId,
+      timeOfDay,
+    });
+  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, selectedSiteId, timeOfDay]);
+
   const age = model.timeSeconds - model.twin.lastMeasurementSeconds;
   const maxGap = Math.max(
     ...physical.map((server, index) =>
@@ -130,6 +144,7 @@ export default function App() {
         selectedSiteId={selectedSiteId}
         onSelectSite={setSelectedSiteId}
         acousticResults={acousticResults}
+        energyMetrics={energyMetrics}
         running={running}
         onToggleRunning={() => setRunning(!running)}
         simulationTimeSeconds={model.timeSeconds}
@@ -228,6 +243,7 @@ export default function App() {
                   site={activeSite}
                   config={activeConfig}
                   results={acousticResults}
+                  energyMetrics={energyMetrics}
                   fanSpeedPercent={fanSpeedPercent}
                   itPowerKw={itPowerKw}
                   timeOfDay={timeOfDay}
@@ -264,6 +280,30 @@ export default function App() {
                   <small> W</small>
                 </strong>
                 <p>Drives outdoor chiller demand</p>
+              </div>
+              <div>
+                <span>Facility Power & PUE</span>
+                <strong style={{ color: energyMetrics.pueColor }}>
+                  {energyMetrics.facilityPowerKw.toFixed(0)}
+                  <small> kW (PUE {energyMetrics.pue.toFixed(2)})</small>
+                </strong>
+                <p>{energyMetrics.pueRating}</p>
+              </div>
+              <div>
+                <span>Chiller Cooling Load</span>
+                <strong>
+                  {energyMetrics.coolingPowerKw.toFixed(1)}
+                  <small> kW ({energyMetrics.coolingFractionPercent}%)</small>
+                </strong>
+                <p>COP: {energyMetrics.chillerCop} · Fan: {energyMetrics.condenserFanKw.toFixed(1)}kW</p>
+              </div>
+              <div>
+                <span>Grid Carbon Rate</span>
+                <strong>
+                  {energyMetrics.hourlyCarbonKg.toFixed(1)}
+                  <small> kg CO₂/hr</small>
+                </strong>
+                <p>${energyMetrics.hourlyCostUsd.toFixed(2)}/hr · {activeSite.powerGridType.split(' ')[0]}</p>
               </div>
               <div>
                 <span>Indoor Server Fan Noise</span>

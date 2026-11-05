@@ -4,6 +4,7 @@ import { CanvasTexture, DoubleSide } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../simulation/datacenterSites.js";
 import { acousticSimulator } from "../simulation/audioSynthesizer.js";
+import { calculateEnergyMetrics } from "../simulation/energy.js";
 
 /**
  * Camera Navigation with Smooth Orbit and Pan
@@ -916,6 +917,7 @@ export default function AcousticSiteSandbox3D({
   const [selectedId, setSelectedId] = useState(null);
   const [isDragging, setIsDragging] = useState(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const [hudTelemetryMode, setHudTelemetryMode] = useState("all"); // "all" | "acoustics" | "energy"
 
   // Dynamic Layout Items per Site
   const [layoutItems, setLayoutItems] = useState(() => [
@@ -1202,6 +1204,19 @@ export default function AcousticSiteSandbox3D({
     };
   }, [chiller, probe, walls, treeClusters, site, fanSpeedPercent, itPowerKw, timeOfDay]);
 
+  // Live facility energy, cooling power, PUE, and carbon calculation
+  const energyMetrics = useMemo(() => {
+    return calculateEnergyMetrics({
+      itPowerKw,
+      ambientTempC: site.ambientTempC,
+      fanSpeedPercent,
+      chillerPlacement: chiller.placement,
+      silencers: chiller.silencers,
+      siteId: site.id,
+      timeOfDay,
+    });
+  }, [itPowerKw, site, fanSpeedPercent, chiller.placement, chiller.silencers, timeOfDay]);
+
   // Live Sound Wave Isophone Radii
   const isophoneRadii = useMemo(() => {
     const netDba = acousticResults.netReceivedLp;
@@ -1281,33 +1296,108 @@ export default function AcousticSiteSandbox3D({
         </div>
       </div>
 
-      {/* 2. CLEAN FLOATING DECIBEL STATUS CARD */}
-      <div className="clean-floating-decibel-card">
-        <div className="decibel-main-row">
-          <span className="decibel-number" style={{ color: acousticResults.statusColor }}>
-            {acousticResults.netReceivedLp.toFixed(1)}
-          </span>
-          <span className="decibel-unit">dBA</span>
-          <span
-            className="decibel-compliance-pill"
-            style={{
-              background: `${acousticResults.statusColor}22`,
-              color: acousticResults.statusColor,
-              borderColor: `${acousticResults.statusColor}66`,
-            }}
+      {/* 2. CLEAN FLOATING MULTI-TELEMETRY CARD (ACOUSTICS + ENERGY) */}
+      <div className="clean-floating-decibel-card telemetry-multi-card">
+        <div className="telemetry-tabs-row">
+          <button
+            className={`telemetry-tab-pill ${hudTelemetryMode === "all" ? "active" : ""}`}
+            onClick={() => setHudTelemetryMode("all")}
+            title="Unified Acoustics & Energy View"
           >
-            {acousticResults.statusText}
-          </span>
+            📊 Unified
+          </button>
+          <button
+            className={`telemetry-tab-pill ${hudTelemetryMode === "acoustics" ? "active" : ""}`}
+            onClick={() => setHudTelemetryMode("acoustics")}
+            title="Acoustic Decibel Monitoring"
+          >
+            🔊 {acousticResults.netReceivedLp.toFixed(1)} dBA
+          </button>
+          <button
+            className={`telemetry-tab-pill ${hudTelemetryMode === "energy" ? "active" : ""}`}
+            onClick={() => setHudTelemetryMode("energy")}
+            title="Energy & PUE Monitoring"
+          >
+            ⚡ PUE {energyMetrics.pue.toFixed(2)}
+          </button>
         </div>
-        <div className="decibel-sub-row">
-          <span>
-            {acousticResults.distanceMeters}m from plant · {timeOfDay === "day" ? "Day" : "Night"} limit:{" "}
-            <strong>{acousticResults.activeLimit} dBA</strong>
-          </span>
-        </div>
-        <div className="decibel-hint">
-          {acousticResults.isCompliant ? "✓ Safe nocturnal sleep sanctuary" : "⚠️ Violates municipal noise ordinance"}
-        </div>
+
+        {/* Section A: Acoustic Decibel Monitoring */}
+        {(hudTelemetryMode === "acoustics" || hudTelemetryMode === "all") && (
+          <div className="telemetry-section acoustics-section">
+            <div className="decibel-main-row">
+              <span className="decibel-number" style={{ color: acousticResults.statusColor }}>
+                {acousticResults.netReceivedLp.toFixed(1)}
+              </span>
+              <span className="decibel-unit">dBA</span>
+              <span
+                className="decibel-compliance-pill"
+                style={{
+                  background: `${acousticResults.statusColor}22`,
+                  color: acousticResults.statusColor,
+                  borderColor: `${acousticResults.statusColor}66`,
+                }}
+              >
+                {acousticResults.statusText}
+              </span>
+            </div>
+            <div className="decibel-sub-row">
+              <span>
+                {acousticResults.distanceMeters}m to homes · {timeOfDay === "day" ? "Day" : "Night"} limit:{" "}
+                <strong>{acousticResults.activeLimit} dBA</strong>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Section B: Energy & PUE Telemetry */}
+        {(hudTelemetryMode === "energy" || hudTelemetryMode === "all") && (
+          <div className={`telemetry-section energy-section ${hudTelemetryMode === "all" ? "bordered-top" : ""}`}>
+            <div className="energy-header-row">
+              <div className="energy-stat-pair">
+                <span className="energy-stat-label">FACILITY POWER</span>
+                <span className="energy-stat-big">{energyMetrics.facilityPowerKw.toFixed(0)} <small>kW</small></span>
+              </div>
+              <div className="energy-stat-pair">
+                <span className="energy-stat-label">PUE BENCHMARK</span>
+                <span className="energy-stat-big" style={{ color: energyMetrics.pueColor }}>
+                  {energyMetrics.pue.toFixed(2)}
+                </span>
+              </div>
+              <span
+                className="energy-rating-badge"
+                style={{
+                  background: `${energyMetrics.pueColor}22`,
+                  color: energyMetrics.pueColor,
+                  borderColor: `${energyMetrics.pueColor}66`,
+                }}
+              >
+                {energyMetrics.pueRating.split(" ")[0]}
+              </span>
+            </div>
+
+            {/* Split Bar: IT Compute vs Chiller Cooling */}
+            <div className="energy-bar-track" title={`IT Load: ${energyMetrics.itPowerKw} kW (${energyMetrics.itFractionPercent}%) | Cooling: ${energyMetrics.coolingPowerKw} kW (${energyMetrics.coolingFractionPercent}%)`}>
+              <div className="bar-fill-it" style={{ width: `${energyMetrics.itFractionPercent}%` }}></div>
+              <div className="bar-fill-cooling" style={{ width: `${energyMetrics.coolingFractionPercent}%` }}></div>
+            </div>
+            <div className="energy-bar-legend">
+              <span>IT: <strong>{energyMetrics.itPowerKw}kW</strong></span>
+              <span>Cooling: <strong>{energyMetrics.coolingPowerKw}kW</strong> (COP {energyMetrics.chillerCop})</span>
+            </div>
+
+            <div className="energy-eco-footer">
+              <span>🌱 <strong>{energyMetrics.hourlyCarbonKg.toFixed(1)}</strong> kg CO₂/h</span>
+              <span>·</span>
+              <span>💵 <strong>${energyMetrics.hourlyCostUsd.toFixed(2)}</strong>/h</span>
+              {energyMetrics.hourlyCostSavedUsd > 0 && (
+                <span className="eco-savings-tag" title="Saved compared to 100% full-blast unoptimized fan duty">
+                  Save ${energyMetrics.hourlyCostSavedUsd.toFixed(2)}/h
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3. MAIN 3D THREE.JS CANVAS */}
@@ -1510,7 +1600,12 @@ export default function AcousticSiteSandbox3D({
 
           {selectedItem.type === "chiller" && (
             <div className="inspector-content-row">
-              <span className="inspector-title">🏢 Chiller Yard</span>
+              <div className="inspector-title-group">
+                <span className="inspector-title">🏢 Chiller Yard</span>
+                <span className="inspector-telemetry-chip" style={{ color: energyMetrics.pueColor }}>
+                  ⚡ {energyMetrics.coolingPowerKw.toFixed(0)} kW Cooling (PUE {energyMetrics.pue.toFixed(2)})
+                </span>
+              </div>
               <div className="inspector-actions">
                 <span className="inspector-label">Placement:</span>
                 <button
