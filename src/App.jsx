@@ -8,6 +8,7 @@ import Header from "./components/Header.jsx";
 import LandingPage from "./components/LandingPage.jsx";
 import Footer from "./components/Footer.jsx";
 import AcousticControls from "./components/AcousticControls.jsx";
+import AcousticEngineeringReport from "./components/AcousticEngineeringReport.jsx";
 import FleetComparisonView from "./components/FleetComparisonView.jsx";
 import ServerControls from "./components/ServerControls.jsx";
 import TemperatureChart from "./components/TemperatureChart.jsx";
@@ -219,27 +220,17 @@ export default function App() {
               )}
             </div>
 
-            {/* Optional Collapsible Engineering Acoustic Controls & Link Budget Drawer */}
+            {/* Collapsible Executive Acoustic Engineering Report (Lighter Whitepaper Background) */}
             {showReport && (
-              <div className="pro-report-drawer animated-fadeIn">
-                <div className="pro-report-drawer-header">
-                  <div>
-                    <h3>🔬 Full Acoustic Engineering Link Budget (ISO 9613-2)</h3>
-                    <p>Octave-band transmission loss, Maekawa diffraction, and thermodynamic heat rejection</p>
-                  </div>
-                  <button className="close-report-btn" onClick={() => setShowReport(false)}>
-                    ✕ Close Report
-                  </button>
-                </div>
-                <AcousticControls
+              <div className="report-drawer-outer-wrap animated-fadeIn">
+                <AcousticEngineeringReport
                   site={activeSite}
                   config={activeConfig}
-                  onChangeConfig={handleUpdateConfig}
                   results={acousticResults}
                   fanSpeedPercent={fanSpeedPercent}
-                  onChangeFanSpeed={setFanSpeedPercent}
+                  itPowerKw={itPowerKw}
                   timeOfDay={timeOfDay}
-                  onChangeTimeOfDay={setTimeOfDay}
+                  onClose={() => setShowReport(false)}
                 />
               </div>
             )}
