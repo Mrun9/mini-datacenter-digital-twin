@@ -2,14 +2,13 @@ import { useState, useEffect } from "react";
 import {
   WALL_MATERIALS,
   REGIONAL_TREE_SPECIES,
-  CHILLER_PLACEMENTS,
 } from "../simulation/datacenterSites.js";
 import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 
 /**
  * Animated Frequency Equalizer Bars for Audio Simulation
  */
-function AudioVisualizerBars({ isPlaying, dba }) {
+function AudioVisualizerBars({ isPlaying, dba, timeOfDay }) {
   const bars = [
     { freq: "60Hz", base: 0.8 },
     { freq: "90Hz", base: 0.5 },
@@ -25,18 +24,17 @@ function AudioVisualizerBars({ isPlaying, dba }) {
     { freq: "5k", base: 0.2 },
   ];
 
-  // Scale height by decibels
   const levelFactor = Math.max(0.2, Math.min(1.2, (dba - 25) / 50));
 
   return (
     <div className={`audio-visualizer ${isPlaying ? "active" : "idle"}`}>
       <div className="visualizer-header">
         <span className="visualizer-title">
-          {isPlaying ? "🔊 LIVE ACOUSTIC SPECTRUM" : "⏸ SPECTRUM IDLE"}
+          {isPlaying ? (timeOfDay === "day" ? "☀️ DAYTIME ACOUSTIC SPECTRUM" : "🌙 NIGHTTIME ACOUSTIC SPECTRUM") : "⏸ SPECTRUM IDLE"}
         </span>
         <span className="visualizer-sub">
           {isPlaying
-            ? `Synthesizing ${dba.toFixed(1)} dBA at receptor`
+            ? `Synthesizing ${dba.toFixed(1)} dBA (${timeOfDay === "day" ? "Traffic Masked" : "Nocturnal Silence Exposed"})`
             : "Click to hear neighborhood noise"}
         </span>
       </div>
@@ -69,17 +67,15 @@ function AudioVisualizerBars({ isPlaying, dba }) {
 /**
  * Animated Circular / Radial Decibel Gauge
  */
-function DecibelComplianceGauge({ netDba, limitDba, statusColor, isCompliant }) {
-  // Gauge spans 20 dBA to 80 dBA (range = 60 dBA)
+function DecibelComplianceGauge({ netDba, limitDba, statusColor, isCompliant, timeOfDay }) {
   const minVal = 25;
   const maxVal = 75;
   const clampedDba = Math.max(minVal, Math.min(maxVal, netDba));
   const percent = (clampedDba - minVal) / (maxVal - minVal);
-  const limitPercent = (limitDba - minVal) / (maxVal - minVal);
 
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
-  const arcLength = circumference * 0.75; // 270 degree arc
+  const arcLength = circumference * 0.75;
   const strokeDashoffset = arcLength - arcLength * percent;
 
   const margin = limitDba - netDba;
@@ -122,13 +118,13 @@ function DecibelComplianceGauge({ netDba, limitDba, statusColor, isCompliant }) 
         </div>
         <div className="gauge-margin-text">
           {margin >= 0 ? (
-            <span className="margin-safe"><strong>-{margin.toFixed(1)} dBA</strong> below municipal limit</span>
+            <span className="margin-safe"><strong>-{margin.toFixed(1)} dBA</strong> below {timeOfDay} limit</span>
           ) : (
-            <span className="margin-danger"><strong>+{Math.abs(margin).toFixed(1)} dBA</strong> over municipal limit</span>
+            <span className="margin-danger"><strong>+{Math.abs(margin).toFixed(1)} dBA</strong> over {timeOfDay} limit</span>
           )}
         </div>
         <div className="gauge-limit-ref">
-          Municipal Limit: <strong>{limitDba} dBA</strong>
+          {timeOfDay === "day" ? "Daytime Limit:" : "Night Curfew Limit:"} <strong>{limitDba} dBA</strong>
         </div>
       </div>
     </div>
@@ -142,24 +138,27 @@ export default function AcousticControls({
   results,
   fanSpeedPercent,
   onChangeFanSpeed,
+  timeOfDay = "night",
+  onChangeTimeOfDay,
 }) {
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [showThermoNote, setShowThermoNote] = useState(false);
-  const [activeTab, setActiveTab] = useState("mitigations"); // "mitigations" | "presets" | "budget"
+  const [activeTab, setActiveTab] = useState("architecture"); // "architecture" | "mitigations" | "budget" | "insights"
 
   const toggleAudio = () => {
     const isNowPlaying = acousticSimulator.toggle();
     setAudioPlaying(isNowPlaying);
     if (isNowPlaying) {
       acousticSimulator.setDecibels(results.netReceivedLp);
+      acousticSimulator.setTimeOfDay(timeOfDay);
     }
   };
 
   useEffect(() => {
     if (audioPlaying) {
       acousticSimulator.setDecibels(results.netReceivedLp);
+      acousticSimulator.setTimeOfDay(timeOfDay);
     }
-  }, [results.netReceivedLp, audioPlaying]);
+  }, [results.netReceivedLp, audioPlaying, timeOfDay]);
 
   const update = (patch) => {
     onChangeConfig({ ...config, ...patch });
@@ -175,7 +174,9 @@ export default function AcousticControls({
           placement: "side_exposed",
           wallEnabled: false,
           wallHeightMeters: 4,
+          wallEnclosure: "single_east",
           treeEnabled: false,
+          acousticSilencers: false,
           chillerOrientationAngle: 0,
         });
         break;
@@ -187,7 +188,9 @@ export default function AcousticControls({
           wallEnabled: true,
           wallHeightMeters: 8,
           wallMaterial: "absorptive_metal",
+          wallEnclosure: "u_shape",
           treeEnabled: false,
+          acousticSilencers: true,
           chillerOrientationAngle: 90,
         });
         break;
@@ -199,8 +202,11 @@ export default function AcousticControls({
           wallEnabled: true,
           wallHeightMeters: 8,
           wallMaterial: "absorptive_metal",
+          wallEnclosure: "u_shape",
           treeEnabled: true,
           treeBufferDepthMeters: 30,
+          treeArrangement: "perimeter_ring",
+          acousticSilencers: true,
           chillerOrientationAngle: 135,
         });
         break;
@@ -211,9 +217,12 @@ export default function AcousticControls({
           placement: "underground",
           wallEnabled: true,
           wallHeightMeters: 12,
-          wallMaterial: "aerated_concrete",
+          wallMaterial: "dense_concrete",
+          wallEnclosure: "full_4side",
           treeEnabled: true,
           treeBufferDepthMeters: 40,
+          treeArrangement: "perimeter_ring",
+          acousticSilencers: true,
           chillerOrientationAngle: 180,
         });
         break;
@@ -271,9 +280,10 @@ export default function AcousticControls({
           {/* Left: Decibel Radial Gauge */}
           <DecibelComplianceGauge
             netDba={results.netReceivedLp}
-            limitDba={site.municipalNoiseLimitDba}
+            limitDba={results.municipalNoiseLimitDba}
             statusColor={results.statusColor}
             isCompliant={results.isCompliant}
+            timeOfDay={timeOfDay}
           />
 
           {/* Center: Live Audio Ear Simulator & Visualizer */}
@@ -289,31 +299,33 @@ export default function AcousticControls({
               </div>
               <div className="audio-btn-text">
                 <strong>{audioPlaying ? "Stop Audio Simulation" : "Listen at Neighbor's Porch"}</strong>
-                <small>60Hz / 120Hz Hum + Fan Airflow Roar</small>
+                <small>{timeOfDay === "day" ? "Daytime Traffic Ambient Masking" : "Night Curfew (60Hz Drone Exposed)"}</small>
               </div>
             </button>
 
-            <AudioVisualizerBars isPlaying={audioPlaying} dba={results.netReceivedLp} />
+            <AudioVisualizerBars isPlaying={audioPlaying} dba={results.netReceivedLp} timeOfDay={timeOfDay} />
           </div>
 
           {/* Right: Quick Stats & Receptors */}
           <div className="receptor-stats-box">
-            <span className="eyebrow">RECEPTOR TELEMETRY</span>
+            <span className="eyebrow">RECEPTOR TELEMETRY ({timeOfDay.toUpperCase()})</span>
             <div className="receptor-stat-row">
               <span>Distance to Homes:</span>
               <strong>{site.defaultDistanceToHomesMeters}m</strong>
             </div>
             <div className="receptor-stat-row">
-              <span>Low-Freq Hum:</span>
-              <strong>{results.netReceivedLpC.toFixed(1)} dBC</strong>
+              <span>Ambient Background:</span>
+              <strong>{results.backgroundNoiseFloor} dBA</strong>
             </div>
             <div className="receptor-stat-row">
-              <span>Unmitigated Source:</span>
-              <strong style={{ color: "#f87171" }}>{results.unmitigatedLp.toFixed(1)} dBA</strong>
+              <span>Signal-to-Noise Ratio:</span>
+              <strong style={{ color: results.snrAboveAmbient > 10 ? "#ef4444" : "#34d399" }}>
+                +{results.snrAboveAmbient} dB over ambient
+              </strong>
             </div>
             <div className="receptor-stat-row">
-              <span>Net Attenuation:</span>
-              <strong style={{ color: "#34d399" }}>-{results.noiseReductionDb.toFixed(1)} dBA</strong>
+              <span>Thermal Inversion:</span>
+              <strong>{timeOfDay === "night" ? "+1.8 dB (Sound Bends Down)" : "-1.2 dB (Upward Lapse)"}</strong>
             </div>
           </div>
         </div>
@@ -358,7 +370,7 @@ export default function AcousticControls({
             <span className="preset-icon">🌲</span>
             <div className="preset-meta">
               <strong>Bio-Acoustic Buffer</strong>
-              <small>Semi-Berm · Wall + 30m Trees</small>
+              <small>Semi-Berm · 360° Forest Ring</small>
             </div>
           </button>
 
@@ -370,7 +382,7 @@ export default function AcousticControls({
             <span className="preset-icon">🛡️</span>
             <div className="preset-meta">
               <strong>Ultra-Silent Vault</strong>
-              <small>Subterranean · 12m Wall · -28dB</small>
+              <small>Subterranean · 4-Sided Shroud</small>
             </div>
           </button>
         </div>
@@ -379,11 +391,18 @@ export default function AcousticControls({
       {/* 3. Navigation Tabs for Detailed Controls */}
       <div className="controls-nav-tabs">
         <button
+          className={`control-tab-btn ${activeTab === "architecture" ? "active" : ""}`}
+          onClick={() => setActiveTab("architecture")}
+        >
+          <span className="tab-icon">🏛️</span>
+          <span>Architectural Re-Design</span>
+        </button>
+        <button
           className={`control-tab-btn ${activeTab === "mitigations" ? "active" : ""}`}
           onClick={() => setActiveTab("mitigations")}
         >
           <span className="tab-icon">🎛️</span>
-          <span>Mitigation Controls</span>
+          <span>Walls & Forest Buffers</span>
         </button>
         <button
           className={`control-tab-btn ${activeTab === "budget" ? "active" : ""}`}
@@ -401,14 +420,75 @@ export default function AcousticControls({
         </button>
       </div>
 
-      {/* Tab 1: Detailed Mitigation Controls */}
-      {activeTab === "mitigations" && (
+      {/* Tab 1: Architectural Data Center Re-Design */}
+      {activeTab === "architecture" && (
         <div className="controls-columns">
-          {/* Pillar 1: Chiller Placement & Mechanical Operation */}
+          {/* Facility Footprint & Time of Day */}
           <section className="control-card animated-card">
             <div className="card-header">
-              <span className="eyebrow">STEP 1: ARCHITECTURAL SITE PLACEMENT</span>
-              <h4>Chiller Yard Location</h4>
+              <span className="eyebrow">FACILITY GEOMETRY & TIME OF DAY</span>
+              <h4>Data Center Form Factor</h4>
+            </div>
+
+            <div className="field-group">
+              <label>Time-of-Day Acoustic Regulatory Mode</label>
+              <div className="time-toggle-row">
+                <button
+                  className={`time-btn ${timeOfDay === "day" ? "active day" : ""}`}
+                  onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+                >
+                  ☀️ Daytime Mode (55 dBA Limit · 52 dBA Ambient)
+                </button>
+                <button
+                  className={`time-btn ${timeOfDay === "night" ? "active night" : ""}`}
+                  onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
+                >
+                  🌙 Night Curfew (45 dBA Limit · 32 dBA Quiet · Inversion)
+                </button>
+              </div>
+            </div>
+
+            <div className="field-group">
+              <label>Compute Building Footprint</label>
+              <div className="button-group-row">
+                <button
+                  className={(!config.buildingStyle || config.buildingStyle === "1story") ? "active" : ""}
+                  onClick={() => update({ buildingStyle: "1story" })}
+                >
+                  🏢 1-Story Hyperscale Hall
+                </button>
+                <button
+                  className={config.buildingStyle === "2story" ? "active" : ""}
+                  onClick={() => update({ buildingStyle: "2story" })}
+                >
+                  🏙️ 2-Story Double-Decker
+                </button>
+              </div>
+            </div>
+
+            <div className="field-group">
+              <div className="toggle-label-row">
+                <label>Compressor Sound Blankets & Silencers (-5.5 dB)</label>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={!!config.acousticSilencers}
+                    onChange={(e) => update({ acousticSilencers: e.target.checked })}
+                  />
+                  <span className="slider-toggle"></span>
+                </label>
+              </div>
+              <small className="field-hint">
+                Wraps twin-screw compressors in acoustic lead-free vinyl jackets and installs aerodynamic exhaust cowl silencers.
+              </small>
+            </div>
+          </section>
+
+          {/* Chiller Placement & Mechanical Operation */}
+          <section className="control-card animated-card">
+            <div className="card-header">
+              <span className="eyebrow">CHILLER YARD ARCHITECTURE</span>
+              <h4>Outdoor Cooling Plant Location</h4>
             </div>
 
             <div className="placement-grid-compact">
@@ -467,16 +547,21 @@ export default function AcousticControls({
                 className="interactive-slider"
               />
               <div className="slider-sub-readout">
-                <span>Points exhaust away from homes</span>
+                <span>Points exhaust away from residential zone</span>
                 <strong>-{results.breakdown.directivityAttenuation} dB</strong>
               </div>
             </div>
           </section>
+        </div>
+      )}
 
-          {/* Pillar 2: Acoustic Barrier Walls */}
+      {/* Tab 2: Walls & Forest Buffers */}
+      {activeTab === "mitigations" && (
+        <div className="controls-columns">
+          {/* Pillar 1: Acoustic Barrier Walls */}
           <section className="control-card animated-card">
             <div className="card-header">
-              <span className="eyebrow">STEP 2: PERIMETER SOUND BARRIER</span>
+              <span className="eyebrow">PERIMETER SOUND BARRIER ARRANGEMENT</span>
               <div className="header-toggle">
                 <h4>Acoustic Screen Wall</h4>
                 <label className="switch">
@@ -491,9 +576,36 @@ export default function AcousticControls({
             </div>
 
             <div className={config.wallEnabled ? "card-body" : "card-body disabled"}>
+              <div className="field-group">
+                <label>Enclosure Configuration (3D Arrangement)</label>
+                <div className="button-group-row">
+                  <button
+                    className={(!config.wallEnclosure || config.wallEnclosure === "single_east") ? "active" : ""}
+                    onClick={() => update({ wallEnclosure: "single_east" })}
+                    title="Single East barrier wall facing neighborhood"
+                  >
+                    🏢 East Wall Only
+                  </button>
+                  <button
+                    className={config.wallEnclosure === "u_shape" ? "active" : ""}
+                    onClick={() => update({ wallEnclosure: "u_shape" })}
+                    title="U-Shaped acoustic cowl (East, North, South) (+2.0 dB bonus)"
+                  >
+                    🛡️ U-Shaped Cowl
+                  </button>
+                  <button
+                    className={config.wallEnclosure === "full_4side" ? "active" : ""}
+                    onClick={() => update({ wallEnclosure: "full_4side" })}
+                    title="Full 4-sided enclosure around chiller plant (+3.5 dB bonus)"
+                  >
+                    🔒 4-Sided Shroud
+                  </button>
+                </div>
+              </div>
+
               <div className="slider-group">
                 <label className="slider-label">
-                  <span>Wall Height</span>
+                  <span>Wall Elevation (Height in 3D)</span>
                   <b className="highlight-val">{config.wallHeightMeters} meters</b>
                 </label>
                 <input
@@ -542,10 +654,10 @@ export default function AcousticControls({
             </div>
           </section>
 
-          {/* Pillar 3: Regional Bio-Acoustic Vegetation Buffer */}
+          {/* Pillar 2: Bio-Acoustic Tree Screen Buffer */}
           <section className="control-card animated-card">
             <div className="card-header">
-              <span className="eyebrow">STEP 3: BIO-ACOUSTIC BUFFER</span>
+              <span className="eyebrow">BIO-ACOUSTIC BUFFER ARRANGEMENT</span>
               <div className="header-toggle">
                 <h4>Native Tree Buffer Zone</h4>
                 <label className="switch">
@@ -560,6 +672,24 @@ export default function AcousticControls({
             </div>
 
             <div className={config.treeEnabled ? "card-body" : "card-body disabled"}>
+              <div className="field-group">
+                <label>Arrangement Scope</label>
+                <div className="button-group-row">
+                  <button
+                    className={(!config.treeArrangement || config.treeArrangement === "east_buffer") ? "active" : ""}
+                    onClick={() => update({ treeArrangement: "east_buffer" })}
+                  >
+                    🌲 East Screen (Homes)
+                  </button>
+                  <button
+                    className={config.treeArrangement === "perimeter_ring" ? "active" : ""}
+                    onClick={() => update({ treeArrangement: "perimeter_ring" })}
+                  >
+                    🌐 360° Perimeter Belt
+                  </button>
+                </div>
+              </div>
+
               <div className="field-group">
                 <label>Regional Low-Maintenance Tree Species</label>
                 <select
@@ -617,15 +747,15 @@ export default function AcousticControls({
         </div>
       )}
 
-      {/* Tab 2: ISO 9613-2 Link Budget */}
+      {/* Tab 3: ISO 9613-2 Link Budget */}
       {activeTab === "budget" && (
         <section className="acoustic-budget-card animated-card">
           <div className="budget-header-row">
             <div>
               <span className="eyebrow">ISO 9613-2 ACOUSTIC LINK BUDGET BREAKDOWN</span>
-              <h4>End-to-End Sound Attenuation Calculation</h4>
+              <h4>End-to-End Sound Attenuation Calculation ({timeOfDay.toUpperCase()})</h4>
             </div>
-            <span className="budget-tag">ISO 9613-2 / Maekawa Standard</span>
+            <span className="budget-tag">ISO 9613-2 Standard</span>
           </div>
 
           <div className="budget-flow">
@@ -637,6 +767,11 @@ export default function AcousticControls({
             <div className="budget-item">
               <span>Distance Decay ({site.defaultDistanceToHomesMeters}m)</span>
               <strong>{results.breakdown.geometricDecay} dB</strong>
+            </div>
+            <div className="budget-operator">{results.breakdown.inversionEffect >= 0 ? "+" : "−"}</div>
+            <div className="budget-item">
+              <span>Inversion Effect ({timeOfDay})</span>
+              <strong>{Math.abs(results.breakdown.inversionEffect)} dB</strong>
             </div>
             <div className="budget-operator">−</div>
             <div className="budget-item">
@@ -653,11 +788,6 @@ export default function AcousticControls({
               <span>Tree Buffer</span>
               <strong>{results.breakdown.treeAttenuation} dB</strong>
             </div>
-            <div className="budget-operator">+</div>
-            <div className="budget-item">
-              <span>Terrain Echo</span>
-              <strong>{results.breakdown.terrainEchoDb} dB</strong>
-            </div>
             <div className="budget-operator">=</div>
             <div className="budget-item total">
               <span>Community Noise (Lp)</span>
@@ -667,7 +797,7 @@ export default function AcousticControls({
         </section>
       )}
 
-      {/* Tab 3: Thermodynamic & Engineering Insights */}
+      {/* Tab 4: Thermodynamic & Engineering Insights */}
       {activeTab === "insights" && (
         <section className="thermo-note-card animated-card expanded">
           <div className="thermo-note-header">

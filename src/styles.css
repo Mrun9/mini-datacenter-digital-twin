@@ -3853,3 +3853,170 @@ input:checked + .slider-toggle:before {
   color: #86efac;
   border: 1px solid #34d399;
 }
+
+
+/* =====================================================================
+   TIME OF DAY, 360-SURROUNDINGS & ARCHITECTURAL RE-DESIGN STYLES
+   ===================================================================== */
+
+.time-toggle-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.time-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #111e32;
+  border: 1px solid #1e3352;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.time-btn:hover {
+  background: #192b47;
+  color: #ffffff;
+}
+
+.time-btn.active.day {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  color: #041226;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.time-btn.active.night {
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 100%);
+  color: #e0e7ff;
+  border-color: #818cf8;
+  box-shadow: 0 0 12px rgba(129, 140, 248, 0.4);
+}
+
+.button-group-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.button-group-row button {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #111e32;
+  border: 1px solid #1e3352;
+  border-radius: 8px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.button-group-row button:hover {
+  background: #1a2f4c;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.button-group-row button.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.toggle-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* 360-Degree Surrounding Analysis Grid */
+.surrounding-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1024px) {
+  .surrounding-analysis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .surrounding-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.surround-col {
+  background: #0c1524;
+  border: 1px solid #1e2d42;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.compass-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.compass-pill.north {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.compass-pill.east {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.compass-pill.south {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.compass-pill.west {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.surround-col h4 {
+  font-size: 13px;
+  margin: 0 0 6px 0;
+  color: #f1f5f9;
+}
+
+.surround-col p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.45;
+}

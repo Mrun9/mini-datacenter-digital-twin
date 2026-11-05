@@ -27,6 +27,7 @@ export default function App() {
   const [running, setRunning] = useState(true);
   const [tab, setTab] = useState("site"); // "site" | "fleet" | "indoor" | "landing"
   const [viewportMode, setViewportMode] = useState("twin"); // "twin" | "satellite" | "split"
+  const [timeOfDay, setTimeOfDay] = useState("night"); // "day" | "night"
   const [, refresh] = useState(0);
   const redraw = () => refresh((value) => value + 1);
 
@@ -83,17 +84,22 @@ export default function App() {
       fanSpeedPercent,
       distanceToHomesMeters: activeSite.defaultDistanceToHomesMeters,
       municipalNoiseLimitDba: activeSite.municipalNoiseLimitDba,
+      daytimeNoiseLimitDba: activeSite.daytimeNoiseLimitDba || 55,
+      timeOfDay,
       terrainEchoDb: activeSite.terrainEchoAmplificationDb,
       chillerPlacement: activeConfig.placement,
       wallHeightMeters: activeConfig.wallHeightMeters,
       wallMaterial: activeConfig.wallMaterial,
       wallEnabled: activeConfig.wallEnabled,
+      wallEnclosure: activeConfig.wallEnclosure || "single_east",
       treeBufferDepthMeters: activeConfig.treeBufferDepthMeters,
       treeSpeciesId: activeConfig.treeSpeciesId,
       treeEnabled: activeConfig.treeEnabled,
+      treeArrangement: activeConfig.treeArrangement || "east_buffer",
       chillerOrientationAngle: activeConfig.chillerOrientationAngle,
+      acousticSilencers: activeConfig.acousticSilencers || false,
     });
-  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig]);
+  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, timeOfDay]);
 
   const age = model.timeSeconds - model.twin.lastMeasurementSeconds;
   const maxGap = Math.max(
@@ -222,6 +228,8 @@ export default function App() {
                       running={running}
                       itPowerKw={itPowerKw}
                       fanSpeedPercent={fanSpeedPercent}
+                      timeOfDay={timeOfDay}
+                      onChangeTimeOfDay={setTimeOfDay}
                     />
                   </Suspense>
                 </div>
@@ -242,6 +250,8 @@ export default function App() {
               results={acousticResults}
               fanSpeedPercent={fanSpeedPercent}
               onChangeFanSpeed={setFanSpeedPercent}
+              timeOfDay={timeOfDay}
+              onChangeTimeOfDay={setTimeOfDay}
             />
           </section>
         )}
