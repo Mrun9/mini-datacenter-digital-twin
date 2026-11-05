@@ -30,12 +30,12 @@ function AudioVisualizerBars({ isPlaying, dba, timeOfDay }) {
     <div className={`audio-visualizer ${isPlaying ? "active" : "idle"}`}>
       <div className="visualizer-header">
         <span className="visualizer-title">
-          {isPlaying ? (timeOfDay === "day" ? "☀️ DAYTIME ACOUSTIC SPECTRUM" : "🌙 NIGHTTIME ACOUSTIC SPECTRUM") : "⏸ SPECTRUM IDLE"}
+          {isPlaying ? (timeOfDay === "day" ? "☀️ DAYTIME AUDIO SPECTRUM" : "🌙 NIGHTTIME AUDIO SPECTRUM") : "⏸ AUDIO SIMULATOR IDLE"}
         </span>
         <span className="visualizer-sub">
           {isPlaying
-            ? `Synthesizing ${dba.toFixed(1)} dBA (${timeOfDay === "day" ? "Traffic Masked" : "Nocturnal Silence Exposed"})`
-            : "Click to hear neighborhood noise"}
+            ? `Synthesizing ${dba.toFixed(1)} dBA (${timeOfDay === "day" ? "Traffic Masked" : "Nocturnal Silence"})`
+            : "Click button to hear neighbor's porch"}
         </span>
       </div>
       <div className="equalizer-bars-row">
@@ -64,73 +64,6 @@ function AudioVisualizerBars({ isPlaying, dba, timeOfDay }) {
   );
 }
 
-/**
- * Animated Circular / Radial Decibel Gauge
- */
-function DecibelComplianceGauge({ netDba, limitDba, statusColor, isCompliant, timeOfDay }) {
-  const minVal = 25;
-  const maxVal = 75;
-  const clampedDba = Math.max(minVal, Math.min(maxVal, netDba));
-  const percent = (clampedDba - minVal) / (maxVal - minVal);
-
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const arcLength = circumference * 0.75;
-  const strokeDashoffset = arcLength - arcLength * percent;
-
-  const margin = limitDba - netDba;
-
-  return (
-    <div className="decibel-radial-gauge">
-      <div className="gauge-svg-wrap">
-        <svg viewBox="0 0 140 140" className="gauge-svg">
-          <circle
-            cx="70"
-            cy="70"
-            r={radius}
-            className="gauge-bg-arc"
-            strokeDasharray={`${arcLength} ${circumference}`}
-            strokeDashoffset="0"
-          />
-          <circle
-            cx="70"
-            cy="70"
-            r={radius}
-            className="gauge-progress-arc"
-            style={{
-              stroke: statusColor,
-              strokeDasharray: `${arcLength} ${circumference}`,
-              strokeDashoffset,
-            }}
-          />
-        </svg>
-        <div className="gauge-center-content">
-          <span className="gauge-val" style={{ color: statusColor }}>
-            {netDba.toFixed(1)}
-          </span>
-          <span className="gauge-unit">dBA</span>
-        </div>
-      </div>
-
-      <div className="gauge-info-col">
-        <div className="gauge-status-tag" style={{ background: `${statusColor}22`, color: statusColor, borderColor: `${statusColor}66` }}>
-          {isCompliant ? "✓ COMPLIANT" : "⚠️ EXCEEDS LIMIT"}
-        </div>
-        <div className="gauge-margin-text">
-          {margin >= 0 ? (
-            <span className="margin-safe"><strong>-{margin.toFixed(1)} dBA</strong> below {timeOfDay} limit</span>
-          ) : (
-            <span className="margin-danger"><strong>+{Math.abs(margin).toFixed(1)} dBA</strong> over {timeOfDay} limit</span>
-          )}
-        </div>
-        <div className="gauge-limit-ref">
-          {timeOfDay === "day" ? "Daytime Limit:" : "Night Curfew Limit:"} <strong>{limitDba} dBA</strong>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AcousticControls({
   site,
   config,
@@ -142,7 +75,8 @@ export default function AcousticControls({
   onChangeTimeOfDay,
 }) {
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [activeTab, setActiveTab] = useState("architecture"); // "architecture" | "mitigations" | "budget" | "insights"
+  const [uiMode, setUiMode] = useState("simple"); // "simple" | "pro"
+  const [proTab, setProTab] = useState("architecture"); // "architecture" | "walls" | "budget" | "insights"
 
   const toggleAudio = () => {
     const isNowPlaying = acousticSimulator.toggle();
@@ -164,7 +98,7 @@ export default function AcousticControls({
     onChangeConfig({ ...config, ...patch });
   };
 
-  // 1-Click Engineering Mitigation Presets
+  // Presets
   const applyPreset = (presetKey) => {
     switch (presetKey) {
       case "violation":
@@ -234,588 +168,588 @@ export default function AcousticControls({
   const currentWall = WALL_MATERIALS[config.wallMaterial] || WALL_MATERIALS.absorptive_metal;
   const currentTree = REGIONAL_TREE_SPECIES[config.treeSpeciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
 
-  const placements = [
-    {
-      id: "rear_shielded",
-      name: "Rear Shielded",
-      icon: "🏢",
-      badge: "-18.0 dB",
-      desc: "Building blocks line of sight",
-    },
-    {
-      id: "side_exposed",
-      name: "Side Exposed",
-      icon: "⚠️",
-      badge: "0.0 dB",
-      desc: "Direct radiation to homes",
-    },
-    {
-      id: "rooftop",
-      name: "Rooftop Penthouse",
-      icon: "🏙️",
-      badge: "+3.5 dB",
-      desc: "Elevated line of sight",
-    },
-    {
-      id: "underground",
-      name: "Subterranean Bunker",
-      icon: "🛡️",
-      badge: "-28.0 dB",
-      desc: "Excavated below grade",
-    },
-    {
-      id: "semi_berm",
-      name: "Semi-Bermed Basin",
-      icon: "⛰️",
-      badge: "-11.5 dB",
-      desc: "Natural earthen mounds",
-    },
-  ];
-
   return (
     <div className="acoustic-controls-panel">
-      {/* 1. Hero Compliance Bar with Radial Gauge & Audio Visualizer */}
-      <section className="compliance-banner-elevated" style={{ borderColor: results.statusColor }}>
-        <div className="compliance-main-grid">
-          {/* Left: Decibel Radial Gauge */}
-          <DecibelComplianceGauge
-            netDba={results.netReceivedLp}
-            limitDba={results.municipalNoiseLimitDba}
-            statusColor={results.statusColor}
-            isCompliant={results.isCompliant}
-            timeOfDay={timeOfDay}
-          />
-
-          {/* Center: Live Audio Ear Simulator & Visualizer */}
-          <div className="audio-control-center">
-            <button
-              className={`audio-btn-elevated ${audioPlaying ? "playing" : ""}`}
-              onClick={toggleAudio}
-              title="Listen to synthesized noise level at neighbor's property line"
-            >
-              <div className="audio-btn-icon-wrap">
-                <span className="audio-icon">{audioPlaying ? "🔊" : "🎧"}</span>
-                {audioPlaying && <span className="audio-pulse-ring"></span>}
-              </div>
-              <div className="audio-btn-text">
-                <strong>{audioPlaying ? "Stop Audio Simulation" : "Listen at Neighbor's Porch"}</strong>
-                <small>{timeOfDay === "day" ? "Daytime Traffic Ambient Masking" : "Night Curfew (60Hz Drone Exposed)"}</small>
-              </div>
-            </button>
-
-            <AudioVisualizerBars isPlaying={audioPlaying} dba={results.netReceivedLp} timeOfDay={timeOfDay} />
-          </div>
-
-          {/* Right: Quick Stats & Receptors */}
-          <div className="receptor-stats-box">
-            <span className="eyebrow">RECEPTOR TELEMETRY ({timeOfDay.toUpperCase()})</span>
-            <div className="receptor-stat-row">
-              <span>Distance to Homes:</span>
-              <strong>{site.defaultDistanceToHomesMeters}m</strong>
-            </div>
-            <div className="receptor-stat-row">
-              <span>Ambient Background:</span>
-              <strong>{results.backgroundNoiseFloor} dBA</strong>
-            </div>
-            <div className="receptor-stat-row">
-              <span>Signal-to-Noise Ratio:</span>
-              <strong style={{ color: results.snrAboveAmbient > 10 ? "#ef4444" : "#34d399" }}>
-                +{results.snrAboveAmbient} dB over ambient
-              </strong>
-            </div>
-            <div className="receptor-stat-row">
-              <span>Thermal Inversion:</span>
-              <strong>{timeOfDay === "night" ? "+1.8 dB (Sound Bends Down)" : "-1.2 dB (Upward Lapse)"}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Quick Presets Toolbar */}
-      <section className="presets-bar">
-        <div className="presets-title-row">
-          <span className="eyebrow">⚡ 1-CLICK ENGINEERING PRESETS:</span>
-          <span className="presets-hint">Instant scenario modeling</span>
-        </div>
-        <div className="presets-grid">
+      {/* Top Bar: Mode Switcher (Simple vs Pro) & 1-Click Presets */}
+      <div className="panel-mode-bar">
+        <div className="ui-mode-toggle">
           <button
-            className="preset-btn danger"
-            onClick={() => applyPreset("violation")}
-            title="Exposed side yard with no barrier walls or trees (severe violation)"
+            className={`mode-btn ${uiMode === "simple" ? "active" : ""}`}
+            onClick={() => setUiMode("simple")}
           >
-            <span className="preset-icon">🚨</span>
-            <div className="preset-meta">
-              <strong>Unmitigated Violation</strong>
-              <small>Side Yard · 90% Fan · No Wall</small>
-            </div>
+            ✨ Simple Mode (Executive)
           </button>
-
           <button
-            className="preset-btn standard"
-            onClick={() => applyPreset("compliant")}
-            title="Building-shielded rear yard with 8m absorptive barrier wall"
+            className={`mode-btn ${uiMode === "pro" ? "active" : ""}`}
+            onClick={() => setUiMode("pro")}
           >
-            <span className="preset-icon">🏢</span>
-            <div className="preset-meta">
-              <strong>Code Compliant Standard</strong>
-              <small>Rear Shielded · 8m Wall</small>
-            </div>
-          </button>
-
-          <button
-            className="preset-btn eco"
-            onClick={() => applyPreset("eco_forest")}
-            title="Semi-bermed chiller yard with 8m wall and 30m native evergreen forest"
-          >
-            <span className="preset-icon">🌲</span>
-            <div className="preset-meta">
-              <strong>Bio-Acoustic Buffer</strong>
-              <small>Semi-Berm · 360° Forest Ring</small>
-            </div>
-          </button>
-
-          <button
-            className="preset-btn silent"
-            onClick={() => applyPreset("vault_bunker")}
-            title="Subterranean bunker vault with 12m wall and 40m forest"
-          >
-            <span className="preset-icon">🛡️</span>
-            <div className="preset-meta">
-              <strong>Ultra-Silent Vault</strong>
-              <small>Subterranean · 4-Sided Shroud</small>
-            </div>
+            📊 Pro Mode (Acoustic Engineering)
           </button>
         </div>
-      </section>
 
-      {/* 3. Navigation Tabs for Detailed Controls */}
-      <div className="controls-nav-tabs">
-        <button
-          className={`control-tab-btn ${activeTab === "architecture" ? "active" : ""}`}
-          onClick={() => setActiveTab("architecture")}
-        >
-          <span className="tab-icon">🏛️</span>
-          <span>Architectural Re-Design</span>
-        </button>
-        <button
-          className={`control-tab-btn ${activeTab === "mitigations" ? "active" : ""}`}
-          onClick={() => setActiveTab("mitigations")}
-        >
-          <span className="tab-icon">🎛️</span>
-          <span>Walls & Forest Buffers</span>
-        </button>
-        <button
-          className={`control-tab-btn ${activeTab === "budget" ? "active" : ""}`}
-          onClick={() => setActiveTab("budget")}
-        >
-          <span className="tab-icon">📊</span>
-          <span>ISO 9613-2 Link Budget</span>
-        </button>
-        <button
-          className={`control-tab-btn ${activeTab === "insights" ? "active" : ""}`}
-          onClick={() => setActiveTab("insights")}
-        >
-          <span className="tab-icon">🔬</span>
-          <span>Engineering Insights</span>
-        </button>
+        <div className="quick-presets-strip">
+          <span className="strip-label">PRESETS:</span>
+          <button className="preset-pill danger" onClick={() => applyPreset("violation")}>
+            🚨 Violation
+          </button>
+          <button className="preset-pill standard" onClick={() => applyPreset("compliant")}>
+            🏢 Code Compliant
+          </button>
+          <button className="preset-pill eco" onClick={() => applyPreset("eco_forest")}>
+            🌲 Bio-Buffer
+          </button>
+          <button className="preset-pill silent" onClick={() => applyPreset("vault_bunker")}>
+            🛡️ Silent Bunker
+          </button>
+        </div>
       </div>
 
-      {/* Tab 1: Architectural Data Center Re-Design */}
-      {activeTab === "architecture" && (
-        <div className="controls-columns">
-          {/* Facility Footprint & Time of Day */}
-          <section className="control-card animated-card">
-            <div className="card-header">
-              <span className="eyebrow">FACILITY GEOMETRY & TIME OF DAY</span>
-              <h4>Data Center Form Factor</h4>
+      {/* Hero Community Health & Compliance Card */}
+      <section className="clean-hero-card" style={{ borderColor: results.statusColor }}>
+        <div className="hero-status-left">
+          <div className="status-pill-large" style={{ background: `${results.statusColor}20`, color: results.statusColor, borderColor: `${results.statusColor}60` }}>
+            {results.isCompliant ? "✓ PEACEFUL & COMPLIANT" : "⚠️ NOISE VIOLATION DETECTED"}
+          </div>
+          <div className="status-decibel-row">
+            <span className="big-dba" style={{ color: results.statusColor }}>
+              {results.netReceivedLp.toFixed(1)} <small>dBA</small>
+            </span>
+            <div className="status-sub-info">
+              <span>{timeOfDay === "day" ? "Daytime Limit:" : "Night Curfew Limit:"} <strong>{results.municipalNoiseLimitDba} dBA</strong></span>
+              <span className="margin-note" style={{ color: results.isCompliant ? "#34d399" : "#ef4444" }}>
+                {results.marginDb >= 0 ? `✓ -${results.marginDb.toFixed(1)} dBA below limit` : `⚠️ +${Math.abs(results.marginDb).toFixed(1)} dBA over limit`}
+              </span>
             </div>
+          </div>
+          <p className="status-plain-text">
+            {results.isCompliant
+              ? `Sound levels at the residential boundary (${site.defaultDistanceToHomesMeters}m away) are quiet enough for peaceful sleep without community lawsuits.`
+              : `Chiller noise exceeds local municipal noise limits. High risk of stop-work injunctions from residential neighbors.`}
+          </p>
+        </div>
 
-            <div className="field-group">
-              <label>Time-of-Day Acoustic Regulatory Mode</label>
-              <div className="time-toggle-row">
-                <button
-                  className={`time-btn ${timeOfDay === "day" ? "active day" : ""}`}
-                  onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
-                >
-                  ☀️ Daytime Mode (55 dBA Limit · 52 dBA Ambient)
-                </button>
-                <button
-                  className={`time-btn ${timeOfDay === "night" ? "active night" : ""}`}
-                  onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
-                >
-                  🌙 Night Curfew (45 dBA Limit · 32 dBA Quiet · Inversion)
-                </button>
+        <div className="hero-audio-right">
+          <button
+            className={`clean-audio-btn ${audioPlaying ? "playing" : ""}`}
+            onClick={toggleAudio}
+          >
+            <span className="audio-btn-icon">{audioPlaying ? "🔊" : "🎧"}</span>
+            <div className="audio-btn-desc">
+              <strong>{audioPlaying ? "Stop Audio Simulation" : "Listen at Neighbor's Porch"}</strong>
+              <small>{timeOfDay === "day" ? "Daytime Traffic Masked" : "Night Curfew (60Hz Hum Exposed)"}</small>
+            </div>
+          </button>
+
+          <AudioVisualizerBars isPlaying={audioPlaying} dba={results.netReceivedLp} timeOfDay={timeOfDay} />
+        </div>
+      </section>
+
+      {/* =========================================================================
+          VIEW A: SIMPLE MODE (Clean, intuitive, zero-jargon for a naive person)
+          ========================================================================= */}
+      {uiMode === "simple" && (
+        <div className="simple-controls-grid animated-fadeIn">
+          {/* Card 1: Chiller Placement */}
+          <div className="simple-card">
+            <span className="card-step-tag">STEP 1</span>
+            <h3>Where are the chillers placed?</h3>
+            <p className="card-subtext">Positioning cooling equipment behind the building blocks direct line-of-sight sound.</p>
+
+            <div className="simple-choice-list">
+              <button
+                className={`simple-choice-btn ${config.placement === "rear_shielded" ? "active" : ""}`}
+                onClick={() => update({ placement: "rear_shielded" })}
+              >
+                <span className="choice-icon">🏢</span>
+                <div className="choice-text">
+                  <strong>Behind Building (Shielded)</strong>
+                  <small>Building core blocks noise (-18 dB)</small>
+                </div>
+              </button>
+
+              <button
+                className={`simple-choice-btn ${config.placement === "side_exposed" || config.placement === "surface" ? "active" : ""}`}
+                onClick={() => update({ placement: "side_exposed" })}
+              >
+                <span className="choice-icon">⚠️</span>
+                <div className="choice-text">
+                  <strong>Side / Front Yard (Exposed)</strong>
+                  <small>Direct line of sight to homes (0 dB)</small>
+                </div>
+              </button>
+
+              <button
+                className={`simple-choice-btn ${config.placement === "underground" ? "active" : ""}`}
+                onClick={() => update({ placement: "underground" })}
+              >
+                <span className="choice-icon">🛡️</span>
+                <div className="choice-text">
+                  <strong>Underground Bunker Vault</strong>
+                  <small>Excavated 6m below grade (-28 dB)</small>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Sound Barrier Wall */}
+          <div className="simple-card">
+            <span className="card-step-tag">STEP 2</span>
+            <h3>How tall is the sound barrier wall?</h3>
+            <p className="card-subtext">Acoustic walls bend sound upward and absorb reflections before reaching homes.</p>
+
+            <div className="simple-slider-block">
+              <div className="slider-header-row">
+                <span>Wall Height</span>
+                <strong className="slider-big-val">{config.wallEnabled ? `${config.wallHeightMeters} meters` : "None (Off)"}</strong>
               </div>
-            </div>
 
-            <div className="field-group">
-              <label>Compute Building Footprint</label>
-              <div className="button-group-row">
-                <button
-                  className={(!config.buildingStyle || config.buildingStyle === "1story") ? "active" : ""}
-                  onClick={() => update({ buildingStyle: "1story" })}
-                >
-                  🏢 1-Story Hyperscale Hall
-                </button>
-                <button
-                  className={config.buildingStyle === "2story" ? "active" : ""}
-                  onClick={() => update({ buildingStyle: "2story" })}
-                >
-                  🏙️ 2-Story Double-Decker
-                </button>
-              </div>
-            </div>
-
-            <div className="field-group">
-              <div className="toggle-label-row">
-                <label>Compressor Sound Blankets & Silencers (-5.5 dB)</label>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={!!config.acousticSilencers}
-                    onChange={(e) => update({ acousticSilencers: e.target.checked })}
-                  />
-                  <span className="slider-toggle"></span>
-                </label>
-              </div>
-              <small className="field-hint">
-                Wraps twin-screw compressors in acoustic lead-free vinyl jackets and installs aerodynamic exhaust cowl silencers.
-              </small>
-            </div>
-          </section>
-
-          {/* Chiller Placement & Mechanical Operation */}
-          <section className="control-card animated-card">
-            <div className="card-header">
-              <span className="eyebrow">CHILLER YARD ARCHITECTURE</span>
-              <h4>Outdoor Cooling Plant Location</h4>
-            </div>
-
-            <div className="placement-grid-compact">
-              {placements.map((p) => {
-                const isActive = config.placement === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    className={`placement-card-btn ${isActive ? "active" : ""}`}
-                    onClick={() => update({ placement: p.id })}
-                  >
-                    <div className="p-header">
-                      <span className="p-icon">{p.icon}</span>
-                      <span className={`p-badge ${p.badge.startsWith("+") ? "penalty" : "bonus"}`}>
-                        {p.badge}
-                      </span>
-                    </div>
-                    <strong>{p.name}</strong>
-                    <small>{p.desc}</small>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="slider-group">
-              <label className="slider-label">
-                <span>Condenser Fan Duty Cycle</span>
-                <b className="highlight-val">{fanSpeedPercent}%</b>
-              </label>
-              <input
-                type="range"
-                min="30"
-                max="100"
-                value={fanSpeedPercent}
-                onChange={(e) => onChangeFanSpeed(Number(e.target.value))}
-                className="interactive-slider"
-              />
-              <div className="slider-sub-readout">
-                <span>Directly affects source sound power</span>
-                <strong>Lw: {results.sourceLw} dBA</strong>
-              </div>
-            </div>
-
-            <div className="slider-group">
-              <label className="slider-label">
-                <span>Exhaust Directivity Angle</span>
-                <b className="highlight-val">{config.chillerOrientationAngle}° away</b>
-              </label>
               <input
                 type="range"
                 min="0"
-                max="180"
-                step="15"
-                value={config.chillerOrientationAngle}
-                onChange={(e) => update({ chillerOrientationAngle: Number(e.target.value) })}
-                className="interactive-slider"
+                max="16"
+                step="2"
+                value={config.wallEnabled ? config.wallHeightMeters : 0}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (val === 0) update({ wallEnabled: false, wallHeightMeters: 4 });
+                  else update({ wallEnabled: true, wallHeightMeters: val });
+                }}
+                className="clean-slider"
               />
-              <div className="slider-sub-readout">
-                <span>Points exhaust away from residential zone</span>
-                <strong>-{results.breakdown.directivityAttenuation} dB</strong>
+
+              <div className="quick-btn-row">
+                <button
+                  className={!config.wallEnabled ? "active" : ""}
+                  onClick={() => update({ wallEnabled: false })}
+                >
+                  No Wall
+                </button>
+                <button
+                  className={config.wallEnabled && config.wallHeightMeters === 8 ? "active" : ""}
+                  onClick={() => update({ wallEnabled: true, wallHeightMeters: 8, wallMaterial: "absorptive_metal" })}
+                >
+                  8m Standard
+                </button>
+                <button
+                  className={config.wallEnabled && config.wallHeightMeters >= 12 ? "active" : ""}
+                  onClick={() => update({ wallEnabled: true, wallHeightMeters: 14, wallMaterial: "absorptive_metal" })}
+                >
+                  14m Tall Shield
+                </button>
+              </div>
+
+              <div className="simple-readout-pill">
+                <span>Sound Reduction: </span>
+                <strong style={{ color: "#34d399" }}>-{results.breakdown.wallAttenuation} dBA</strong>
               </div>
             </div>
-          </section>
+          </div>
+
+          {/* Card 3: Evergreen Tree Screen */}
+          <div className="simple-card">
+            <span className="card-step-tag">STEP 3</span>
+            <h3>Do you want an evergreen tree screen?</h3>
+            <p className="card-subtext">Dense pine and cedar needles scatter high-frequency fan whine naturally.</p>
+
+            <div className="simple-slider-block">
+              <div className="slider-header-row">
+                <span>Tree Belt Depth</span>
+                <strong className="slider-big-val">{config.treeEnabled ? `${config.treeBufferDepthMeters} meters` : "None (Off)"}</strong>
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max="60"
+                step="10"
+                value={config.treeEnabled ? config.treeBufferDepthMeters : 0}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (val === 0) update({ treeEnabled: false, treeBufferDepthMeters: 15 });
+                  else update({ treeEnabled: true, treeBufferDepthMeters: val });
+                }}
+                className="clean-slider"
+              />
+
+              <div className="quick-btn-row">
+                <button
+                  className={!config.treeEnabled ? "active" : ""}
+                  onClick={() => update({ treeEnabled: false })}
+                >
+                  No Trees
+                </button>
+                <button
+                  className={config.treeEnabled && config.treeBufferDepthMeters === 20 ? "active" : ""}
+                  onClick={() => update({ treeEnabled: true, treeBufferDepthMeters: 20 })}
+                >
+                  20m Screen
+                </button>
+                <button
+                  className={config.treeEnabled && config.treeBufferDepthMeters >= 40 ? "active" : ""}
+                  onClick={() => update({ treeEnabled: true, treeBufferDepthMeters: 40, treeArrangement: "perimeter_ring" })}
+                >
+                  40m Forest Belt
+                </button>
+              </div>
+
+              <div className="simple-readout-pill">
+                <span>Sound Reduction: </span>
+                <strong style={{ color: "#34d399" }}>-{results.breakdown.treeAttenuation} dBA</strong>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Tab 2: Walls & Forest Buffers */}
-      {activeTab === "mitigations" && (
-        <div className="controls-columns">
-          {/* Pillar 1: Acoustic Barrier Walls */}
-          <section className="control-card animated-card">
-            <div className="card-header">
-              <span className="eyebrow">PERIMETER SOUND BARRIER ARRANGEMENT</span>
-              <div className="header-toggle">
-                <h4>Acoustic Screen Wall</h4>
-                <label className="switch">
+      {/* =========================================================================
+          VIEW B: PRO ENGINEERING MODE (Full telemetry for acoustic engineers)
+          ========================================================================= */}
+      {uiMode === "pro" && (
+        <div className="pro-controls-wrapper animated-fadeIn">
+          {/* Pro Sub-Navigation Tabs */}
+          <div className="pro-nav-tabs">
+            <button
+              className={`pro-tab-btn ${proTab === "architecture" ? "active" : ""}`}
+              onClick={() => setProTab("architecture")}
+            >
+              🏛️ Architectural Layout
+            </button>
+            <button
+              className={`pro-tab-btn ${proTab === "walls" ? "active" : ""}`}
+              onClick={() => setProTab("walls")}
+            >
+              🧱 Barrier Materials & Trees
+            </button>
+            <button
+              className={`pro-tab-btn ${proTab === "budget" ? "active" : ""}`}
+              onClick={() => setProTab("budget")}
+            >
+              📊 ISO 9613-2 Link Budget
+            </button>
+            <button
+              className={`pro-tab-btn ${proTab === "insights" ? "active" : ""}`}
+              onClick={() => setProTab("insights")}
+            >
+              🔬 Thermodynamics
+            </button>
+          </div>
+
+          {proTab === "architecture" && (
+            <div className="controls-columns">
+              <section className="control-card animated-card">
+                <div className="card-header">
+                  <span className="eyebrow">CHILLER MECHANICAL COMPOUND</span>
+                  <h4>Equipment Placement & Silencers</h4>
+                </div>
+
+                <div className="field-group">
+                  <label>Chiller Yard Location</label>
+                  <div className="button-group-row">
+                    <button
+                      className={config.placement === "rear_shielded" ? "active" : ""}
+                      onClick={() => update({ placement: "rear_shielded" })}
+                    >
+                      🏢 Rear Shielded (-18 dB)
+                    </button>
+                    <button
+                      className={config.placement === "side_exposed" || config.placement === "surface" ? "active" : ""}
+                      onClick={() => update({ placement: "side_exposed" })}
+                    >
+                      ⚠️ Side Exposed (0 dB)
+                    </button>
+                    <button
+                      className={config.placement === "underground" ? "active" : ""}
+                      onClick={() => update({ placement: "underground" })}
+                    >
+                      🛡️ Bunker Vault (-28 dB)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="slider-group">
+                  <label className="slider-label">
+                    <span>Condenser Fan Speed</span>
+                    <b className="highlight-val">{fanSpeedPercent}%</b>
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={config.wallEnabled}
-                    onChange={(e) => update({ wallEnabled: e.target.checked })}
+                    type="range"
+                    min="30"
+                    max="100"
+                    value={fanSpeedPercent}
+                    onChange={(e) => onChangeFanSpeed(Number(e.target.value))}
+                    className="clean-slider"
                   />
-                  <span className="slider-toggle"></span>
-                </label>
-              </div>
+                  <div className="slider-sub-readout">
+                    <span>Source Sound Power</span>
+                    <strong>Lw: {results.sourceLw} dBA</strong>
+                  </div>
+                </div>
+
+                <div className="field-group">
+                  <div className="toggle-label-row">
+                    <label>Acoustic Silencers & Blankets (-5.5 dB)</label>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={!!config.acousticSilencers}
+                        onChange={(e) => update({ acousticSilencers: e.target.checked })}
+                      />
+                      <span className="slider-toggle"></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section className="control-card animated-card">
+                <div className="card-header">
+                  <span className="eyebrow">REGULATORY & ATMOSPHERIC CONDITIONS</span>
+                  <h4>Time of Day & Inversion</h4>
+                </div>
+
+                <div className="field-group">
+                  <label>Acoustic Time of Day</label>
+                  <div className="button-group-row">
+                    <button
+                      className={timeOfDay === "day" ? "active" : ""}
+                      onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+                    >
+                      ☀️ Daytime (55 dBA Limit · 52 dBA Ambient)
+                    </button>
+                    <button
+                      className={timeOfDay === "night" ? "active" : ""}
+                      onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
+                    >
+                      🌙 Night Curfew (45 dBA Limit · 32 dBA Ambient)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="eco-metric-strip" style={{ marginTop: "14px" }}>
+                  <div>
+                    <span>Atmospheric Inversion</span>
+                    <strong>{timeOfDay === "night" ? "+1.8 dB" : "-1.2 dB"}</strong>
+                  </div>
+                  <div>
+                    <span>Receptor SNR</span>
+                    <strong>+{results.snrAboveAmbient} dB</strong>
+                  </div>
+                </div>
+              </section>
             </div>
+          )}
 
-            <div className={config.wallEnabled ? "card-body" : "card-body disabled"}>
-              <div className="field-group">
-                <label>Enclosure Configuration (3D Arrangement)</label>
-                <div className="button-group-row">
-                  <button
-                    className={(!config.wallEnclosure || config.wallEnclosure === "single_east") ? "active" : ""}
-                    onClick={() => update({ wallEnclosure: "single_east" })}
-                    title="Single East barrier wall facing neighborhood"
-                  >
-                    🏢 East Wall Only
-                  </button>
-                  <button
-                    className={config.wallEnclosure === "u_shape" ? "active" : ""}
-                    onClick={() => update({ wallEnclosure: "u_shape" })}
-                    title="U-Shaped acoustic cowl (East, North, South) (+2.0 dB bonus)"
-                  >
-                    🛡️ U-Shaped Cowl
-                  </button>
-                  <button
-                    className={config.wallEnclosure === "full_4side" ? "active" : ""}
-                    onClick={() => update({ wallEnclosure: "full_4side" })}
-                    title="Full 4-sided enclosure around chiller plant (+3.5 dB bonus)"
-                  >
-                    🔒 4-Sided Shroud
-                  </button>
+          {proTab === "walls" && (
+            <div className="controls-columns">
+              <section className="control-card animated-card">
+                <div className="card-header">
+                  <span className="eyebrow">PERIMETER BARRIER WALL</span>
+                  <div className="header-toggle">
+                    <h4>Sound Screen Wall</h4>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={config.wallEnabled}
+                        onChange={(e) => update({ wallEnabled: e.target.checked })}
+                      />
+                      <span className="slider-toggle"></span>
+                    </label>
+                  </div>
                 </div>
-              </div>
 
-              <div className="slider-group">
-                <label className="slider-label">
-                  <span>Wall Elevation (Height in 3D)</span>
-                  <b className="highlight-val">{config.wallHeightMeters} meters</b>
-                </label>
-                <input
-                  type="range"
-                  min="2"
-                  max="16"
-                  step="1"
-                  disabled={!config.wallEnabled}
-                  value={config.wallHeightMeters}
-                  onChange={(e) => update({ wallHeightMeters: Number(e.target.value) })}
-                  className="interactive-slider"
-                />
-                <div className="slider-sub-readout">
-                  <span>Maekawa diffraction insertion loss</span>
-                  <strong style={{ color: "#34d399" }}>-{results.breakdown.wallAttenuation} dB</strong>
-                </div>
-              </div>
+                <div className={config.wallEnabled ? "card-body" : "card-body disabled"}>
+                  <div className="field-group">
+                    <label>Enclosure Configuration</label>
+                    <div className="button-group-row">
+                      <button
+                        className={(!config.wallEnclosure || config.wallEnclosure === "single_east") ? "active" : ""}
+                        onClick={() => update({ wallEnclosure: "single_east" })}
+                      >
+                        East Wall Only
+                      </button>
+                      <button
+                        className={config.wallEnclosure === "u_shape" ? "active" : ""}
+                        onClick={() => update({ wallEnclosure: "u_shape" })}
+                      >
+                        U-Shaped Cowl
+                      </button>
+                      <button
+                        className={config.wallEnclosure === "full_4side" ? "active" : ""}
+                        onClick={() => update({ wallEnclosure: "full_4side" })}
+                      >
+                        4-Sided Shroud
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="field-group">
-                <label>Acoustic Wall Material & NRC Rating</label>
-                <select
-                  disabled={!config.wallEnabled}
-                  value={config.wallMaterial}
-                  onChange={(e) => update({ wallMaterial: e.target.value })}
-                  className="material-select"
-                >
-                  {Object.values(WALL_MATERIALS).map((mat) => (
-                    <option key={mat.id} value={mat.id}>
-                      {mat.name} (NRC: {mat.nrcRating})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="slider-group">
+                    <label className="slider-label">
+                      <span>Wall Height</span>
+                      <b className="highlight-val">{config.wallHeightMeters}m</b>
+                    </label>
+                    <input
+                      type="range"
+                      min="2"
+                      max="16"
+                      step="1"
+                      disabled={!config.wallEnabled}
+                      value={config.wallHeightMeters}
+                      onChange={(e) => update({ wallHeightMeters: Number(e.target.value) })}
+                      className="clean-slider"
+                    />
+                  </div>
 
-              <div className="eco-metric-strip">
-                <div>
-                  <span>Wall Cost Est.</span>
-                  <strong>${results.economics.wallCostEstimate.toLocaleString()}</strong>
+                  <div className="field-group">
+                    <label>Acoustic Wall Material</label>
+                    <select
+                      disabled={!config.wallEnabled}
+                      value={config.wallMaterial}
+                      onChange={(e) => update({ wallMaterial: e.target.value })}
+                      className="material-select"
+                    >
+                      {Object.values(WALL_MATERIALS).map((mat) => (
+                        <option key={mat.id} value={mat.id}>
+                          {mat.name} (NRC: {mat.nrcRating})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="eco-metric-strip">
+                    <div>
+                      <span>Estimated CAPEX</span>
+                      <strong>${results.economics.wallCostEstimate.toLocaleString()}</strong>
+                    </div>
+                    <div>
+                      <span>Embodied CO₂</span>
+                      <strong>{results.economics.wallEmbodiedCarbonKg.toLocaleString()} kg</strong>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span>Embodied CO₂</span>
-                  <strong>{results.economics.wallEmbodiedCarbonKg.toLocaleString()} kg</strong>
+              </section>
+
+              <section className="control-card animated-card">
+                <div className="card-header">
+                  <span className="eyebrow">BIO-ACOUSTIC BUFFER</span>
+                  <div className="header-toggle">
+                    <h4>Vegetation Screen</h4>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={config.treeEnabled}
+                        onChange={(e) => update({ treeEnabled: e.target.checked })}
+                      />
+                      <span className="slider-toggle"></span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-              <p className="material-desc">{currentWall.description}</p>
+
+                <div className={config.treeEnabled ? "card-body" : "card-body disabled"}>
+                  <div className="field-group">
+                    <label>Tree Species</label>
+                    <select
+                      disabled={!config.treeEnabled}
+                      value={config.treeSpeciesId}
+                      onChange={(e) => update({ treeSpeciesId: e.target.value })}
+                      className="material-select"
+                    >
+                      {Object.values(REGIONAL_TREE_SPECIES).map((tree) => (
+                        <option key={tree.id} value={tree.id}>
+                          {tree.name} ({tree.region})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="slider-group">
+                    <label className="slider-label">
+                      <span>Buffer Depth</span>
+                      <b className="highlight-val">{config.treeBufferDepthMeters}m</b>
+                    </label>
+                    <input
+                      type="range"
+                      min="5"
+                      max="80"
+                      step="5"
+                      disabled={!config.treeEnabled}
+                      value={config.treeBufferDepthMeters}
+                      onChange={(e) => update({ treeBufferDepthMeters: Number(e.target.value) })}
+                      className="clean-slider"
+                    />
+                  </div>
+
+                  <div className="eco-metric-strip">
+                    <div>
+                      <span>Annual Maint.</span>
+                      <strong>${results.economics.treeAnnualMaintenanceCost}/yr</strong>
+                    </div>
+                    <div>
+                      <span>Water Footprint</span>
+                      <strong>{results.economics.treeAnnualWaterGallons.toLocaleString()} gal</strong>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
-          </section>
+          )}
 
-          {/* Pillar 2: Bio-Acoustic Tree Screen Buffer */}
-          <section className="control-card animated-card">
-            <div className="card-header">
-              <span className="eyebrow">BIO-ACOUSTIC BUFFER ARRANGEMENT</span>
-              <div className="header-toggle">
-                <h4>Native Tree Buffer Zone</h4>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={config.treeEnabled}
-                    onChange={(e) => update({ treeEnabled: e.target.checked })}
-                  />
-                  <span className="slider-toggle"></span>
-                </label>
-              </div>
-            </div>
-
-            <div className={config.treeEnabled ? "card-body" : "card-body disabled"}>
-              <div className="field-group">
-                <label>Arrangement Scope</label>
-                <div className="button-group-row">
-                  <button
-                    className={(!config.treeArrangement || config.treeArrangement === "east_buffer") ? "active" : ""}
-                    onClick={() => update({ treeArrangement: "east_buffer" })}
-                  >
-                    🌲 East Screen (Homes)
-                  </button>
-                  <button
-                    className={config.treeArrangement === "perimeter_ring" ? "active" : ""}
-                    onClick={() => update({ treeArrangement: "perimeter_ring" })}
-                  >
-                    🌐 360° Perimeter Belt
-                  </button>
-                </div>
-              </div>
-
-              <div className="field-group">
-                <label>Regional Low-Maintenance Tree Species</label>
-                <select
-                  disabled={!config.treeEnabled}
-                  value={config.treeSpeciesId}
-                  onChange={(e) => update({ treeSpeciesId: e.target.value })}
-                  className="material-select"
-                >
-                  {Object.values(REGIONAL_TREE_SPECIES).map((tree) => (
-                    <option key={tree.id} value={tree.id}>
-                      {tree.name} ({tree.region})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="slider-group">
-                <label className="slider-label">
-                  <span>Buffer Depth</span>
-                  <b className="highlight-val">{config.treeBufferDepthMeters} meters</b>
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="80"
-                  step="5"
-                  disabled={!config.treeEnabled}
-                  value={config.treeBufferDepthMeters}
-                  onChange={(e) => update({ treeBufferDepthMeters: Number(e.target.value) })}
-                  className="interactive-slider"
-                />
-                <div className="slider-sub-readout">
-                  <span>ISO 9613-2 foliage scattering</span>
-                  <strong style={{ color: "#34d399" }}>-{results.breakdown.treeAttenuation} dB</strong>
-                </div>
-              </div>
-
-              <div className="eco-metric-strip">
-                <div>
-                  <span>Annual Maint.</span>
-                  <strong>${results.economics.treeAnnualMaintenanceCost}/yr</strong>
-                </div>
-                <div>
-                  <span>Water Use</span>
-                  <strong>{results.economics.treeAnnualWaterGallons.toLocaleString()} gal</strong>
-                </div>
-                <div>
-                  <span>CO₂ Offset</span>
-                  <strong>{results.economics.treeAnnualCo2Kg.toLocaleString()} kg</strong>
-                </div>
-              </div>
-              <p className="material-desc">{currentTree.description}</p>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* Tab 3: ISO 9613-2 Link Budget */}
-      {activeTab === "budget" && (
-        <section className="acoustic-budget-card animated-card">
-          <div className="budget-header-row">
-            <div>
+          {proTab === "budget" && (
+            <section className="acoustic-budget-card animated-card">
               <span className="eyebrow">ISO 9613-2 ACOUSTIC LINK BUDGET BREAKDOWN</span>
-              <h4>End-to-End Sound Attenuation Calculation ({timeOfDay.toUpperCase()})</h4>
-            </div>
-            <span className="budget-tag">ISO 9613-2 Standard</span>
-          </div>
+              <h4>Attenuation Steps from Silicon to Porch</h4>
+              <div className="budget-flow" style={{ marginTop: "16px" }}>
+                <div className="budget-item">
+                  <span>Chiller Source (Lw)</span>
+                  <strong>{results.sourceLw} dBA</strong>
+                </div>
+                <div className="budget-operator">−</div>
+                <div className="budget-item">
+                  <span>Distance ({site.defaultDistanceToHomesMeters}m)</span>
+                  <strong>{results.breakdown.geometricDecay} dB</strong>
+                </div>
+                <div className="budget-operator">−</div>
+                <div className="budget-item">
+                  <span>Placement Shield</span>
+                  <strong>{results.breakdown.placementAttenuation} dB</strong>
+                </div>
+                <div className="budget-operator">−</div>
+                <div className="budget-item">
+                  <span>Barrier Wall</span>
+                  <strong>{results.breakdown.wallAttenuation} dB</strong>
+                </div>
+                <div className="budget-operator">−</div>
+                <div className="budget-item">
+                  <span>Tree Buffer</span>
+                  <strong>{results.breakdown.treeAttenuation} dB</strong>
+                </div>
+                <div className="budget-operator">=</div>
+                <div className="budget-item total">
+                  <span>Net Community Noise</span>
+                  <strong style={{ color: results.statusColor }}>{results.netReceivedLp.toFixed(1)} dBA</strong>
+                </div>
+              </div>
+            </section>
+          )}
 
-          <div className="budget-flow">
-            <div className="budget-item">
-              <span>Chiller Source (Lw)</span>
-              <strong>{results.sourceLw} dBA</strong>
-            </div>
-            <div className="budget-operator">−</div>
-            <div className="budget-item">
-              <span>Distance Decay ({site.defaultDistanceToHomesMeters}m)</span>
-              <strong>{results.breakdown.geometricDecay} dB</strong>
-            </div>
-            <div className="budget-operator">{results.breakdown.inversionEffect >= 0 ? "+" : "−"}</div>
-            <div className="budget-item">
-              <span>Inversion Effect ({timeOfDay})</span>
-              <strong>{Math.abs(results.breakdown.inversionEffect)} dB</strong>
-            </div>
-            <div className="budget-operator">−</div>
-            <div className="budget-item">
-              <span>Placement Shield</span>
-              <strong>{results.breakdown.placementAttenuation} dB</strong>
-            </div>
-            <div className="budget-operator">−</div>
-            <div className="budget-item">
-              <span>Wall Diffraction</span>
-              <strong>{results.breakdown.wallAttenuation} dB</strong>
-            </div>
-            <div className="budget-operator">−</div>
-            <div className="budget-item">
-              <span>Tree Buffer</span>
-              <strong>{results.breakdown.treeAttenuation} dB</strong>
-            </div>
-            <div className="budget-operator">=</div>
-            <div className="budget-item total">
-              <span>Community Noise (Lp)</span>
-              <strong style={{ color: results.statusColor }}>{results.netReceivedLp.toFixed(1)} dBA</strong>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Tab 4: Thermodynamic & Engineering Insights */}
-      {activeTab === "insights" && (
-        <section className="thermo-note-card animated-card expanded">
-          <div className="thermo-note-header">
-            <span>🔬 <strong>Engineering Reality:</strong> Why are chillers placed outdoors?</span>
-          </div>
-          <div className="thermo-note-body">
-            <p>
-              <strong>The 2nd Law of Thermodynamics:</strong> A 50-megawatt data center converts 100% of its electrical power directly into heat.
-              To maintain server inlet temperatures at 20°C to 25°C, that thermal energy must be continuously extracted via chilled water loops
-              and <em>rejected into the outdoor atmosphere</em>.
-            </p>
-            <p>
-              In real hyperscale builds (AWS, Microsoft, Google, Equinix), <strong>air-cooled chillers and cooling towers MUST sit outside</strong> with massive 2-meter axial fans blasting hot air upward.
-              In <strong>Loudoun County, VA ("Data Center Alley")</strong>, placing chillers on the side of the building creates severe community lawsuits, leading planning commissions to mandate
-              <strong> Building-Shielded Rear Yards</strong>, heavy acoustic barrier walls, or subterranean vaults.
-            </p>
-          </div>
-        </section>
+          {proTab === "insights" && (
+            <section className="thermo-note-card animated-card expanded">
+              <div className="thermo-note-header">
+                <span>🔬 <strong>Engineering Reality:</strong> Why are chillers placed outdoors?</span>
+              </div>
+              <div className="thermo-note-body">
+                <p>
+                  <strong>The 2nd Law of Thermodynamics:</strong> A 50-megawatt data center converts 100% of its electrical power directly into heat.
+                  To maintain server inlet temperatures at 20°C to 25°C, that thermal energy must be continuously extracted via chilled water loops
+                  and <em>rejected into the outdoor atmosphere</em>.
+                </p>
+                <p>
+                  In real hyperscale builds (AWS, Microsoft, Google, Equinix), <strong>air-cooled chillers MUST sit outside</strong> with massive 2-meter axial fans blasting hot air upward.
+                  In <strong>Loudoun County, VA ("Data Center Alley")</strong>, placing chillers on the side of the building creates severe community lawsuits, leading planning commissions to mandate
+                  <strong> Building-Shielded Rear Yards</strong>, heavy acoustic barrier walls, or subterranean vaults.
+                </p>
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );

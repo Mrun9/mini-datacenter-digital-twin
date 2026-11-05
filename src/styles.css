@@ -4020,3 +4020,346 @@ input:checked + .slider-toggle:before {
   margin: 0;
   line-height: 1.45;
 }
+
+
+/* ==========================================================================
+   SIMPLE VS PRO MODE ACOUSTIC CONTROLS STYLES
+   Clean, modern, executive-friendly interface without tacky visual clutter
+   ========================================================================== */
+
+.panel-mode-bar {
+  display: flex;
+  background: #090f1d;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+  margin-bottom: 14px;
+  gap: 4px;
+}
+
+.mode-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mode-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-btn.active {
+  background: #1e293b;
+  color: #38bdf8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Clean Hero Card for executive & non-technical users */
+.clean-hero-card {
+  background: linear-gradient(135deg, #0d1525 0%, #070d18 100%);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.clean-hero-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.clean-noise-num {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.clean-noise-unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-left: 4px;
+}
+
+.clean-compliance-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.clean-curfew-note {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.clean-hero-sub {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.45;
+  margin: 0;
+  border-top: 1px solid #1e293b;
+  padding-top: 8px;
+}
+
+/* Simple 3-step controls */
+.simple-controls-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.simple-card {
+  background: #0a1120;
+  border: 1px solid #1a273c;
+  border-radius: 11px;
+  padding: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.simple-card:hover {
+  border-color: #273954;
+}
+
+.simple-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.simple-card-header h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.simple-card-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: #152238;
+  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid #1e3a5f;
+}
+
+.simple-card-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+/* Choice cards list */
+.simple-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice-card {
+  background: #070d18;
+  border: 1px solid #192539;
+  border-radius: 8px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.choice-card:hover {
+  border-color: #2e4465;
+  background: #0d1728;
+}
+
+.choice-card.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+}
+
+.choice-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.choice-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.choice-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: block;
+}
+
+.choice-desc {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.choice-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
+}
+
+.choice-badge.badge-neutral {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+/* Sliders */
+.simple-slider-row {
+  margin: 8px 0 4px 0;
+}
+
+.simple-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Checkbox option */
+.simple-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #080f1b;
+  border-radius: 7px;
+  border: 1px solid #1a283f;
+}
+
+.simple-checkbox-label input {
+  margin-top: 2px;
+  accent-color: #38bdf8;
+}
+
+.simple-checkbox-sub {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* 1-Click quick presets */
+.simple-presets-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.simple-presets-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.simple-presets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.simple-preset-btn {
+  background: #0b1322;
+  border: 1px solid #1d2c43;
+  color: #cbd5e1;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.simple-preset-btn:hover {
+  background: #121e33;
+  border-color: #38bdf8;
+  color: #f8fafc;
+}
+
+/* Pro controls wrapper */
+.pro-controls-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pro-tabs-nav {
+  display: flex;
+  background: #0a1120;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  padding: 3px;
+  gap: 3px;
+}
+
+.pro-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pro-tab-btn:hover {
+  color: #f1f5f9;
+}
+
+.pro-tab-btn.active {
+  background: #1e293b;
+  color: #38bdf8;
+}
