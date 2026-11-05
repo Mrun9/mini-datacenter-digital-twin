@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES, CHILLER_PLACEMENTS } from "../simulation/datacenterSites.js";
 
 const OCTAVE_BANDS = [
@@ -165,7 +166,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
     };
   }, []);
 
-  return (
+  const modalContent = (
     <div className="report-modal-overlay animated-fadeIn" onClick={onClose} role="dialog" aria-modal="true">
       <div className="report-modal-dialog minimal-dialog animated-pop" onClick={(e) => e.stopPropagation()} tabIndex="-1">
         <div className="minimal-report-canvas">
@@ -607,4 +608,6 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 }

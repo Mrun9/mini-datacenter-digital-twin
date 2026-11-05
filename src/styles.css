@@ -4896,28 +4896,29 @@ input:checked + .slider-toggle:before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(10, 15, 29, 0.75);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  z-index: 99999;
+  background: rgba(10, 15, 29, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 999999;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  padding: 42px 24px 24px 24px;
+  box-sizing: border-box;
 }
 
 .report-modal-dialog.minimal-dialog {
   position: relative;
-  width: 100%;
-  max-width: 1060px;
-  max-height: 86vh;
+  width: 95%;
+  max-width: 1240px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   outline: none;
   background: #ffffff;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.35);
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 25px 70px -10px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
@@ -4925,8 +4926,8 @@ input:checked + .slider-toggle:before {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 86vh;
-  padding: 18px 22px;
+  max-height: 90vh;
+  padding: 22px 28px;
   background: #ffffff;
   color: #0f172a;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -4956,31 +4957,31 @@ input:checked + .slider-toggle:before {
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 10px;
-  margin-bottom: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
   flex-shrink: 0;
 }
 
 .min-header-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .min-header-title-row h3 {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: #0f172a;
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .min-status-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 3px 9px;
+  border-radius: 5px;
 }
 
 .min-status-badge.pass {
@@ -4996,10 +4997,10 @@ input:checked + .slider-toggle:before {
 }
 
 .min-header-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   display: block;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .min-header-actions {
@@ -5012,9 +5013,9 @@ input:checked + .slider-toggle:before {
   background: #f8fafc;
   color: #334155;
   border: 1px solid #cbd5e1;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -5030,9 +5031,9 @@ input:checked + .slider-toggle:before {
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   color: #64748b;
-  font-size: 14px;
-  width: 28px;
-  height: 28px;
+  font-size: 15px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -5049,20 +5050,20 @@ input:checked + .slider-toggle:before {
 /* Minimal Tab Navigation */
 .min-nav-tabs {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 6px;
-  margin-bottom: 14px;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
 .min-tab {
   background: transparent;
   border: none;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #64748b;
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -5078,11 +5079,11 @@ input:checked + .slider-toggle:before {
   color: #ffffff;
 }
 
-/* ─── TWO BALANCED HALVES (FITS ON ONE PAGE, MINIMAL SCROLLING) ─── */
+/* ─── TWO BALANCED HALVES (LARGER, AIRIER, PUSHED UP) ─── */
 .min-two-halves-grid {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  gap: 16px;
+  gap: 20px;
   align-items: stretch;
   overflow-y: auto;
   padding-right: 4px;
@@ -5091,51 +5092,51 @@ input:checked + .slider-toggle:before {
 .dashboard-half {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* Left Half: Shortened Top Metric Banner */
 .min-metric-banner {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 12px 18px;
 }
 
 .banner-sublabel {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #64748b;
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 
 .banner-number-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .banner-big-val {
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
   color: #0f172a;
   line-height: 1;
 }
 
 .banner-unit {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: #64748b;
 }
 
 .banner-margin-tag {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 3px 9px;
+  border-radius: 5px;
   margin-left: auto;
 }
 
@@ -5154,10 +5155,10 @@ input:checked + .slider-toggle:before {
 .banner-stats-inline {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: #475569;
   border-top: 1px solid #e2e8f0;
-  padding-top: 6px;
+  padding-top: 8px;
 }
 
 .banner-stats-inline b {
@@ -5168,19 +5169,19 @@ input:checked + .slider-toggle:before {
 .min-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 14px 18px;
 }
 
 .min-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .min-card-header h4 {
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
@@ -5188,11 +5189,11 @@ input:checked + .slider-toggle:before {
 }
 
 .min-tag {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   color: #64748b;
   background: #f1f5f9;
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 4px;
 }
 
@@ -5200,24 +5201,24 @@ input:checked + .slider-toggle:before {
 .min-waterfall-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .min-waterfall-table td {
-  padding: 4px 2px;
+  padding: 5px 3px;
   border-bottom: 1px solid #f8fafc;
   color: #334155;
 }
 
 .min-waterfall-table .desc-cell {
   color: #64748b;
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .min-waterfall-table .val-cell {
   text-align: right;
   font-family: "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -5234,14 +5235,14 @@ input:checked + .slider-toggle:before {
 .min-waterfall-table tr.waterfall-total-row td {
   border-top: 1.5px solid #0f172a;
   border-bottom: none;
-  padding-top: 6px;
-  font-size: 11.5px;
+  padding-top: 8px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #0f172a;
 }
 
 .min-waterfall-table .val-cell.total {
-  font-size: 13px;
+  font-size: 14px;
   color: #0f172a;
 }
 
@@ -5249,44 +5250,44 @@ input:checked + .slider-toggle:before {
 .min-cost-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
 }
 
 .min-cost-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
 }
 
 .cost-label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #64748b;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 
 .cost-val {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 800;
   color: #0f172a;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .cost-val small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #64748b;
 }
 
 .cost-sub {
-  font-size: 9.5px;
+  font-size: 10.5px;
   color: #64748b;
-  margin-top: 2px;
-  line-height: 1.25;
+  margin-top: 3px;
+  line-height: 1.3;
 }
 
 .min-cost-box.highlight-cost {
@@ -5302,20 +5303,20 @@ input:checked + .slider-toggle:before {
 .min-atten-bars {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .atten-bar-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .atten-bar-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: #475569;
 }
 
@@ -5325,7 +5326,7 @@ input:checked + .slider-toggle:before {
 }
 
 .atten-track {
-  height: 5px;
+  height: 6px;
   background: #f1f5f9;
   border-radius: 3px;
   overflow: hidden;
@@ -5358,10 +5359,10 @@ input:checked + .slider-toggle:before {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 10px;
+  padding: 8px 12px;
+  font-size: 11px;
   color: #475569;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 /* ─── SECONDARY TABS CONTENT CONTAINER (SCROLLABLE, CLEAN) ─── */
