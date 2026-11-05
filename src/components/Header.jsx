@@ -7,6 +7,7 @@ export default function Header({
   selectedSiteId,
   onSelectSite,
   acousticResults,
+  energyMetrics,
   running,
   onToggleRunning,
   simulationTimeSeconds,
@@ -108,6 +109,22 @@ export default function Header({
 
       {/* Right Controls: Site Dropdown & Clock */}
       <div className="header-controls">
+        {/* Live Facility Energy & PUE Telemetry Chip */}
+        {energyMetrics && (
+          <div
+            className="header-energy-chip"
+            title={`Total Facility Power: ${energyMetrics.facilityPowerKw} kW | Chiller Cooling: ${energyMetrics.coolingPowerKw} kW | PUE: ${energyMetrics.pue} (${energyMetrics.pueRating})`}
+          >
+            <span className="energy-chip-icon">⚡</span>
+            <div className="energy-chip-text">
+              <span className="energy-chip-kw">{energyMetrics.facilityPowerKw.toFixed(0)} kW</span>
+              <span className="energy-chip-pue" style={{ color: energyMetrics.pueColor }}>
+                PUE {energyMetrics.pue.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Site Dropdown */}
         <div className="site-dropdown-wrapper">
           <label className="dropdown-label">ACTIVE SITE:</label>

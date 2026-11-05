@@ -3,11 +3,14 @@ import { Simulation } from "./simulation/Simulation.js";
 import { powerWatts, totalNoiseDba } from "./simulation/physics.js";
 import { DATA_CENTER_SITES } from "./simulation/datacenterSites.js";
 import { evaluateSiteAcoustics } from "./simulation/acoustics.js";
+import { calculateEnergyMetrics } from "./simulation/energy.js";
 
 import Header from "./components/Header.jsx";
 import LandingPage from "./components/LandingPage.jsx";
 import Footer from "./components/Footer.jsx";
 import AcousticControls from "./components/AcousticControls.jsx";
+import AcousticEngineeringReport from "./components/AcousticEngineeringReport.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import FleetComparisonView from "./components/FleetComparisonView.jsx";
 import ServerControls from "./components/ServerControls.jsx";
 import TemperatureChart from "./components/TemperatureChart.jsx";
@@ -102,6 +105,19 @@ export default function App() {
     });
   }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, timeOfDay]);
 
+  // Real-time campus energy, thermodynamic cooling load, PUE, and carbon calculation
+  const energyMetrics = useMemo(() => {
+    return calculateEnergyMetrics({
+      itPowerKw,
+      ambientTempC: activeSite.ambientTempC,
+      fanSpeedPercent,
+      chillerPlacement: activeConfig.placement,
+      silencers: activeConfig.acousticSilencers || false,
+      siteId: selectedSiteId,
+      timeOfDay,
+    });
+  }, [itPowerKw, activeSite, fanSpeedPercent, activeConfig, selectedSiteId, timeOfDay]);
+
   const age = model.timeSeconds - model.twin.lastMeasurementSeconds;
   const maxGap = Math.max(
     ...physical.map((server, index) =>
@@ -128,6 +144,7 @@ export default function App() {
         selectedSiteId={selectedSiteId}
         onSelectSite={setSelectedSiteId}
         acousticResults={acousticResults}
+        energyMetrics={energyMetrics}
         running={running}
         onToggleRunning={() => setRunning(!running)}
         simulationTimeSeconds={model.timeSeconds}
@@ -189,7 +206,7 @@ export default function App() {
                   className={`clean-pill-btn ${showReport ? "active" : ""}`}
                   onClick={() => setShowReport(!showReport)}
                 >
-                  📊 {showReport ? "Hide Link Budget" : "ISO 9613-2 Budget"}
+                  📊 ISO 9613-2 Budget
                 </button>
               </div>
             </div>
@@ -219,29 +236,20 @@ export default function App() {
               )}
             </div>
 
-            {/* Optional Collapsible Engineering Acoustic Controls & Link Budget Drawer */}
+            {/* Modal Popup: Executive Acoustic Engineering Report (Lighter Whitepaper Background) */}
             {showReport && (
-              <div className="pro-report-drawer animated-fadeIn">
-                <div className="pro-report-drawer-header">
-                  <div>
-                    <h3>🔬 Full Acoustic Engineering Link Budget (ISO 9613-2)</h3>
-                    <p>Octave-band transmission loss, Maekawa diffraction, and thermodynamic heat rejection</p>
-                  </div>
-                  <button className="close-report-btn" onClick={() => setShowReport(false)}>
-                    ✕ Close Report
-                  </button>
-                </div>
-                <AcousticControls
+              <ErrorBoundary onReset={() => setShowReport(false)}>
+                <AcousticEngineeringReport
                   site={activeSite}
                   config={activeConfig}
-                  onChangeConfig={handleUpdateConfig}
                   results={acousticResults}
+                  energyMetrics={energyMetrics}
                   fanSpeedPercent={fanSpeedPercent}
-                  onChangeFanSpeed={setFanSpeedPercent}
+                  itPowerKw={itPowerKw}
                   timeOfDay={timeOfDay}
-                  onChangeTimeOfDay={setTimeOfDay}
+                  onClose={() => setShowReport(false)}
                 />
-              </div>
+              </ErrorBoundary>
             )}
           </section>
         )}
@@ -272,6 +280,30 @@ export default function App() {
                   <small> W</small>
                 </strong>
                 <p>Drives outdoor chiller demand</p>
+              </div>
+              <div>
+                <span>Facility Power & PUE</span>
+                <strong style={{ color: energyMetrics.pueColor }}>
+                  {energyMetrics.facilityPowerKw.toFixed(0)}
+                  <small> kW (PUE {energyMetrics.pue.toFixed(2)})</small>
+                </strong>
+                <p>{energyMetrics.pueRating}</p>
+              </div>
+              <div>
+                <span>Chiller Cooling Load</span>
+                <strong>
+                  {energyMetrics.coolingPowerKw.toFixed(1)}
+                  <small> kW ({energyMetrics.coolingFractionPercent}%)</small>
+                </strong>
+                <p>COP: {energyMetrics.chillerCop} · Fan: {energyMetrics.condenserFanKw.toFixed(1)}kW</p>
+              </div>
+              <div>
+                <span>Grid Carbon Rate</span>
+                <strong>
+                  {energyMetrics.hourlyCarbonKg.toFixed(1)}
+                  <small> kg CO₂/hr</small>
+                </strong>
+                <p>${energyMetrics.hourlyCostUsd.toFixed(2)}/hr · {activeSite.powerGridType.split(' ')[0]}</p>
               </div>
               <div>
                 <span>Indoor Server Fan Noise</span>
