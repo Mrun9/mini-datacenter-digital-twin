@@ -26,7 +26,7 @@ export default function App() {
   const [selectedServerId, setSelectedServerId] = useState(1);
   const [running, setRunning] = useState(true);
   const [tab, setTab] = useState("site"); // "site" | "fleet" | "indoor" | "landing"
-  const [viewportMode, setViewportMode] = useState("twin"); // "twin" | "satellite" | "split"
+  const [viewportMode, setViewportMode] = useState("split"); // "split" | "twin" | "satellite"
   const [timeOfDay, setTimeOfDay] = useState("night"); // "day" | "night"
   const [, refresh] = useState(0);
   const redraw = () => refresh((value) => value + 1);
@@ -168,16 +168,22 @@ export default function App() {
               {/* View Mode Switcher: 3D Twin Sandbox vs Real Satellite Map */}
               <div className="clean-viewport-pills">
                 <button
+                  className={`clean-pill-btn ${viewportMode === "split" ? "active" : ""}`}
+                  onClick={() => setViewportMode("split")}
+                >
+                  ⚡ Side-by-Side (3D + Satellite)
+                </button>
+                <button
                   className={`clean-pill-btn ${viewportMode === "twin" ? "active" : ""}`}
                   onClick={() => setViewportMode("twin")}
                 >
-                  🧊 3D Interactive Twin
+                  🧊 3D Twin Only
                 </button>
                 <button
                   className={`clean-pill-btn ${viewportMode === "satellite" ? "active" : ""}`}
                   onClick={() => setViewportMode("satellite")}
                 >
-                  🛰️ Satellite Imagery
+                  🛰️ Satellite Map Only
                 </button>
                 <button
                   className={`clean-pill-btn ${showReport ? "active" : ""}`}
@@ -189,8 +195,8 @@ export default function App() {
             </div>
 
             {/* Viewport Display: 3D Canvas and/or Satellite Map */}
-            <div className="viewport-display single-frame">
-              {viewportMode === "twin" && (
+            <div className={`viewport-display ${viewportMode === "split" ? "split-mode" : "single-frame"}`}>
+              {(viewportMode === "twin" || viewportMode === "split") && (
                 <div className="canvas-wrapper">
                   <Suspense fallback={<div className="loading-canvas">Initializing 3D Spatial Acoustic Scene...</div>}>
                     <AcousticSiteSandbox3D
@@ -206,7 +212,7 @@ export default function App() {
                 </div>
               )}
 
-              {viewportMode === "satellite" && (
+              {(viewportMode === "satellite" || viewportMode === "split") && (
                 <div className="satellite-wrapper">
                   <SatelliteArchitectureInspector site={activeSite} />
                 </div>
