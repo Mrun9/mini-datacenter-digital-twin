@@ -86,7 +86,7 @@ export default function App() {
       itPowerKw,
       ambientTempC: activeSite.ambientTempC,
       fanSpeedPercent,
-      distanceToHomesMeters: activeSite.defaultDistanceToHomesMeters,
+      distanceToHomesMeters: activeConfig.distanceMeters || activeSite.defaultDistanceToHomesMeters,
       municipalNoiseLimitDba: activeSite.municipalNoiseLimitDba,
       daytimeNoiseLimitDba: activeSite.daytimeNoiseLimitDba || 55,
       timeOfDay,
@@ -223,7 +223,11 @@ export default function App() {
                       fanSpeedPercent={fanSpeedPercent}
                       timeOfDay={timeOfDay}
                       onChangeTimeOfDay={setTimeOfDay}
-                      onOpenReport={() => setShowReport(true)}
+                      onOpenReport={(cfg) => {
+                        if (cfg) handleUpdateConfig(cfg);
+                        setShowReport(true);
+                      }}
+                      onUpdateConfig={handleUpdateConfig}
                     />
                   </Suspense>
                 </div>

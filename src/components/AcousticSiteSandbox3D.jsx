@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { WALL_MATERIALS, REGIONAL_TREE_SPECIES } from "../simulation/datacenterSites.js";
 import { acousticSimulator } from "../simulation/audioSynthesizer.js";
 import { calculateEnergyMetrics } from "../simulation/energy.js";
+import { evaluateSiteAcoustics } from "../simulation/acoustics.js";
 
 /**
  * Camera Navigation with Smooth Orbit and Pan
@@ -911,6 +912,7 @@ export default function AcousticSiteSandbox3D({
   timeOfDay = "night",
   onChangeTimeOfDay,
   onOpenReport,
+  onUpdateConfig,
 }) {
   const [navMode, setNavMode] = useState("orbit");
   const [cameraPreset, setCameraPreset] = useState("reset");
@@ -1122,87 +1124,89 @@ export default function AcousticSiteSandbox3D({
 
   const selectedItem = layoutItems.find((i) => i.id === selectedId);
 
-  // REAL-TIME ACOUSTIC CALCULATION
-  const acousticResults = useMemo(() => {
-    const tempPenalty = Math.max(0, (site.ambientTempC - 20) * 0.4);
-    const fanRatio = Math.max(0.2, fanSpeedPercent / 100);
-    const fanSpeedPenalty = 18 * Math.log10(fanRatio / 0.75);
-    const powerScale = 10 * Math.log10(Math.max(100, itPowerKw) / 500);
-    const baseLw = 108.0;
-    const sourceLw = baseLw + tempPenalty + fanSpeedPenalty + powerScale;
+  // Synthesize up-to-date site configuration from 3D scene elements
+  const effectiveConfig = useMemo(() => {
+    const hasWalls = walls.length > 0;
+    const maxWallHeight = hasWalls ? Math.max(...walls.map((w) => w.height || 8)) : 0;
+    const primaryWall = walls[0];
+    const wallMaterial = primaryWall?.material || "absorptive_metal";
+    const wallEnclosure =
+      walls.length >= 3 ? "full_4side" : walls.length === 2 ? "u_shape" : "single_east";
+
+    const hasTrees = treeClusters.length > 0;
+    const totalTreeDepth = hasTrees
+      ? treeClusters.reduce((sum, t) => sum + (t.depth || 16), 0)
+      : 0;
+    const primaryTree = treeClusters[0];
+    const treeSpeciesId =
+      primaryTree?.speciesId || site.recommendedTreeId || "virginia_pine";
+    const treeArrangement =
+      treeClusters.length >= 2 ? "perimeter_ring" : "east_buffer";
 
     const dx = probe.x - chiller.x;
     const dz = probe.z - chiller.z;
     const sceneDist = Math.hypot(dx, dz);
-    const distanceMeters = Math.max(15, Math.round((sceneDist / 28) * site.defaultDistanceToHomesMeters));
-    const distanceDecay = 20 * Math.log10(distanceMeters) + 11;
-
-    let buildingShieldingDb = 0;
-    if (chiller.x > 14 && probe.x < -10) {
-      buildingShieldingDb = 17.5;
-    }
-
-    let placementAttenDb = 0;
-    if (chiller.placement === "underground") placementAttenDb = 28.0;
-    else if (chiller.placement === "semi_berm") placementAttenDb = 11.5;
-    else if (chiller.placement === "rear_shielded") placementAttenDb = 18.0;
-
-    let wallAttenDb = 0;
-    const minX = Math.min(chiller.x, probe.x);
-    const maxX = Math.max(chiller.x, probe.x);
-
-    walls.forEach((w) => {
-      if (w.x > minX && w.x < maxX && Math.abs(w.z - (chiller.z + probe.z) / 2) < (w.length || 28) / 2 + 8) {
-        const mat = WALL_MATERIALS[w.material] || WALL_MATERIALS.absorptive_metal;
-        const thisWallDb = 4.2 + (w.height || 8) * 1.1 + (mat.nrcRating || 0.95) * 2.8;
-        wallAttenDb += thisWallDb;
-      }
-    });
-    wallAttenDb = Math.min(24.0, wallAttenDb);
-
-    let treeAttenDb = 0;
-    treeClusters.forEach((t) => {
-      if (t.x > minX && t.x < maxX && Math.abs(t.z - (chiller.z + probe.z) / 2) < (t.depth || 16) + 10) {
-        const spec = REGIONAL_TREE_SPECIES[t.speciesId] || REGIONAL_TREE_SPECIES.virginia_pine;
-        const thisTreeDb = (t.depth || 16) * (spec.acousticAbsorptionCoeff || 0.18) * 2.0;
-        treeAttenDb += thisTreeDb;
-      }
-    });
-    treeAttenDb = Math.min(14.0, treeAttenDb);
-
-    const silencerDb = chiller.silencers ? 5.5 : 0;
-    const directivityDb = (chiller.rotation || 0) >= 135 ? 4.0 : 0;
-    const inversionDb = timeOfDay === "night" ? 1.8 : -1.2;
-    const terrainEchoDb = site.terrainEchoAmplificationDb || 0;
-
-    const totalMitigationDb =
-      distanceDecay +
-      buildingShieldingDb +
-      placementAttenDb +
-      wallAttenDb +
-      treeAttenDb +
-      silencerDb +
-      directivityDb -
-      inversionDb -
-      terrainEchoDb;
-
-    const netReceivedLp = Math.max(25, sourceLw - totalMitigationDb);
-    const activeLimit =
-      timeOfDay === "day"
-        ? site.daytimeNoiseLimitDba || 55
-        : site.municipalNoiseLimitDba;
-    const isCompliant = netReceivedLp <= activeLimit;
+    const distanceMeters = Math.max(
+      15,
+      Math.round((sceneDist / 28) * site.defaultDistanceToHomesMeters)
+    );
 
     return {
-      sourceLw: Math.round(sourceLw * 10) / 10,
-      netReceivedLp: Math.round(netReceivedLp * 10) / 10,
+      placement: chiller.placement || "side_exposed",
+      acousticSilencers: Boolean(chiller.silencers),
+      chillerOrientationAngle: chiller.rotation || 0,
+      wallEnabled: hasWalls,
+      wallHeightMeters: maxWallHeight,
+      wallMaterial,
+      wallEnclosure,
+      treeEnabled: hasTrees,
+      treeBufferDepthMeters: totalTreeDepth,
+      treeSpeciesId,
+      treeArrangement,
       distanceMeters,
-      activeLimit,
-      isCompliant,
-      statusColor: isCompliant ? "#34d399" : "#ef4444",
-      statusText: isCompliant ? "COMPLIANT" : "EXCEEDS LIMIT",
+      walls,
+      treeClusters,
     };
-  }, [chiller, probe, walls, treeClusters, site, fanSpeedPercent, itPowerKw, timeOfDay]);
+  }, [walls, treeClusters, chiller, probe, site]);
+
+  // Synchronize 3D layout state upstream to App and Dashboard
+  useEffect(() => {
+    if (onUpdateConfig) {
+      onUpdateConfig(effectiveConfig);
+    }
+  }, [effectiveConfig, onUpdateConfig]);
+
+  // REAL-TIME ACOUSTIC CALCULATION USING ISO 9613-2 ENGINE
+  const acousticResults = useMemo(() => {
+    const evaluation = evaluateSiteAcoustics({
+      itPowerKw,
+      ambientTempC: site.ambientTempC,
+      fanSpeedPercent,
+      distanceToHomesMeters: effectiveConfig.distanceMeters,
+      municipalNoiseLimitDba: site.municipalNoiseLimitDba,
+      daytimeNoiseLimitDba: site.daytimeNoiseLimitDba || 55,
+      timeOfDay,
+      terrainEchoDb: site.terrainEchoAmplificationDb,
+      chillerPlacement: effectiveConfig.placement,
+      wallHeightMeters: effectiveConfig.wallHeightMeters,
+      wallMaterial: effectiveConfig.wallMaterial,
+      wallEnabled: effectiveConfig.wallEnabled,
+      wallEnclosure: effectiveConfig.wallEnclosure,
+      treeBufferDepthMeters: effectiveConfig.treeBufferDepthMeters,
+      treeSpeciesId: effectiveConfig.treeSpeciesId,
+      treeEnabled: effectiveConfig.treeEnabled,
+      treeArrangement: effectiveConfig.treeArrangement,
+      chillerOrientationAngle: effectiveConfig.chillerOrientationAngle,
+      acousticSilencers: effectiveConfig.acousticSilencers,
+    });
+
+    return {
+      ...evaluation,
+      distanceMeters: effectiveConfig.distanceMeters,
+      activeLimit: evaluation.activeLegalLimit,
+      statusText: evaluation.isCompliant ? "COMPLIANT" : "EXCEEDS LIMIT",
+    };
+  }, [itPowerKw, site, fanSpeedPercent, timeOfDay, effectiveConfig]);
 
   // Live facility energy, cooling power, PUE, and carbon calculation
   const energyMetrics = useMemo(() => {
@@ -1210,12 +1214,12 @@ export default function AcousticSiteSandbox3D({
       itPowerKw,
       ambientTempC: site.ambientTempC,
       fanSpeedPercent,
-      chillerPlacement: chiller.placement,
-      silencers: chiller.silencers,
+      chillerPlacement: effectiveConfig.placement,
+      silencers: effectiveConfig.acousticSilencers,
       siteId: site.id,
       timeOfDay,
     });
-  }, [itPowerKw, site, fanSpeedPercent, chiller.placement, chiller.silencers, timeOfDay]);
+  }, [itPowerKw, site, fanSpeedPercent, effectiveConfig.placement, effectiveConfig.acousticSilencers, timeOfDay]);
 
   // Live Sound Wave Isophone Radii
   const isophoneRadii = useMemo(() => {
@@ -1248,51 +1252,61 @@ export default function AcousticSiteSandbox3D({
 
   return (
     <div className="canvas-interactive-wrapper" style={{ position: "relative", width: "100%", height: "720px" }}>
-      {/* 1. CLEAN FLOATING TOP HEADER */}
-      <div className="clean-floating-top-bar">
-        <div className="top-site-badge">
-          <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
-          <span className="top-site-name">{site.name}</span>
+      {/* 1. CLEAN FLOATING VERTICAL CONTROLS DOCK (LEFT SIDE) */}
+      <div className="clean-floating-vertical-dock">
+        <div className="vertical-site-badge">
+          <div className="badge-title-row">
+            <span className="top-site-flag">{site.country === "Ireland" ? "🇮🇪" : "🇺🇸"}</span>
+            <span className="top-site-name">{site.name}</span>
+          </div>
           <span className="top-site-tag">300M 360° SPATIAL TWIN</span>
         </div>
 
-        <div className="top-time-toggle">
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">SIMULATION TIME</span>
+          <div className="vertical-time-toggle">
+            <button
+              className={`time-toggle-btn ${!isNight ? "active" : ""}`}
+              onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+            >
+              ☀️ Day
+            </button>
+            <button
+              className={`time-toggle-btn ${isNight ? "active" : ""}`}
+              onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
+            >
+              🌙 Night
+            </button>
+          </div>
+        </div>
+
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">AUDIO RECEPTOR</span>
           <button
-            className={`time-toggle-btn ${!isNight ? "active" : ""}`}
-            onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("day")}
+            className={`vertical-audio-btn ${audioPlaying ? "playing" : ""}`}
+            onClick={toggleAudio}
+            title="Click to hear synthesized noise at neighbor's property"
           >
-            ☀️ Day
-          </button>
-          <button
-            className={`time-toggle-btn ${isNight ? "active" : ""}`}
-            onClick={() => onChangeTimeOfDay && onChangeTimeOfDay("night")}
-          >
-            🌙 Night Curfew
+            {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
           </button>
         </div>
 
-        <button
-          className={`top-audio-btn ${audioPlaying ? "playing" : ""}`}
-          onClick={toggleAudio}
-          title="Click to hear synthesized noise at neighbor's property"
-        >
-          {audioPlaying ? "🔊 Sound Active" : "🔈 Listen at Sensor"}
-        </button>
-
-        {/* View Presets Bar */}
-        <div className="top-camera-group">
-          <button className="top-cam-btn" onClick={() => setCameraPreset("reset")} title="Expansive 300m Bird's-Eye View">
-            ↺ 300m Campus
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("feature")} title="Focus on site-specific primary feature">
-            {site.id === "the_dalles_or" ? "🌊 River & Canyon" : site.id === "phoenix_az" ? "🏜️ Canal & Desert" : site.id === "dublin_ie" ? "🛶 Grand Canal" : "🛣️ Highway"}
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("homes")} title="Focus on Neighborhood Receptors">
-            🏡 Homes
-          </button>
-          <button className="top-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D Map Plan View">
-            🗺️ 2D Plan
-          </button>
+        <div className="vertical-control-section">
+          <span className="vertical-section-label">CAMERA PRESETS</span>
+          <div className="vertical-camera-group">
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("reset")} title="Expansive 300m Bird's-Eye View">
+              ↺ 300m Campus
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("feature")} title="Focus on site-specific primary feature">
+              {site.id === "the_dalles_or" ? "🌊 River & Canyon" : site.id === "phoenix_az" ? "🏜️ Canal & Desert" : site.id === "dublin_ie" ? "🛶 Grand Canal" : "🛣️ Highway"}
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("homes")} title="Focus on Neighborhood Receptors">
+              🏡 Homes
+            </button>
+            <button className="vertical-cam-btn" onClick={() => setCameraPreset("top")} title="Top-down 2D Map Plan View">
+              🗺️ 2D Plan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1698,7 +1712,11 @@ export default function AcousticSiteSandbox3D({
         </button>
 
         {onOpenReport && (
-          <button className="dock-btn highlight" onClick={onOpenReport} title="Open detailed engineering link budget">
+          <button
+            className="dock-btn highlight"
+            onClick={() => onOpenReport(effectiveConfig)}
+            title="Open detailed engineering link budget"
+          >
             <span className="dock-icon">📊</span>
             <span className="dock-label">Pro Details</span>
           </button>
