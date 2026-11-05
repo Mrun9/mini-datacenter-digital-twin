@@ -6651,4 +6651,397 @@ input:checked + .slider-toggle:before {
   color: #f8fafc;
 }
 
+/* =========================================================================
+   WALL ARBITRARY ROTATION & CURVATURE CONTROLS (INSPECTOR & MODAL)
+   ========================================================================= */
+
+.inspector-toggle-group {
+  display: inline-flex;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.inspector-toggle-group .inspector-pill-choice {
+  border: none;
+  border-radius: 0;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.inspector-toggle-group .inspector-pill-choice.active {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.inspector-angle-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f172a;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+
+.inspector-angle-number-input {
+  width: 48px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 3px 4px;
+  outline: none;
+}
+
+.inspector-angle-number-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+.inspector-unit {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.inspector-angle-range {
+  width: 72px;
+  cursor: pointer;
+  accent-color: #38bdf8;
+}
+
+.inspector-angle-chips {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.angle-chip-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.angle-chip-btn:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.angle-chip-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Modal Wall Shape Strip & Angle Input */
+.modal-shape-strip {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.modal-chip-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-chip-btn:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.modal-chip-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.modal-angle-input-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-number-ctrl {
+  width: 52px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 5px;
+  outline: none;
+}
+
+.modal-range-ctrl {
+  width: 80px;
+  cursor: pointer;
+  accent-color: #38bdf8;
+}
+
+.modal-unit {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+/* =========================================================================
+   INDIVIDUAL TREE PICKER MODAL & LOCATION SUITABILITY
+   ========================================================================= */
+
+.suitability-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.suitability-pill.optimal {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid #10b981;
+}
+
+.suitability-pill.compatible {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid #0284c7;
+}
+
+.suitability-pill.warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid #f59e0b;
+}
+
+/* Tree Picker Dialog */
+.tree-picker-modal-dialog {
+  position: relative;
+  width: 95%;
+  max-width: 1040px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: #0b1329;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(16, 185, 129, 0.2);
+  color: #f1f5f9;
+  overflow: hidden;
+  animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tree-site-climate-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: rgba(16, 185, 129, 0.1);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.climate-banner-flag {
+  font-size: 26px;
+}
+
+.climate-banner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.climate-banner-info strong {
+  font-size: 13px;
+  color: #f1f5f9;
+}
+
+.climate-banner-info p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.climate-banner-info em {
+  color: #34d399;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.tree-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 12px;
+  padding: 18px 24px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.tree-card-option {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tree-card-option:hover {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: #334155;
+  transform: translateY(-2px);
+}
+
+.tree-card-option.selected {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+}
+
+.tree-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.tree-card-icon {
+  font-size: 24px;
+}
+
+.tree-card-headline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.tree-card-botanical {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.tree-card-suitability-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid;
+}
+
+.tree-suitability-note-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  border-left: 3px solid #38bdf8;
+  padding: 6px 8px;
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+.suitability-note-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.suitability-note-text {
+  flex: 1;
+}
+
+.tree-card-specs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.tree-card-specs-row .spec-item {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.spec-highlight {
+  color: #34d399;
+  font-weight: 700;
+}
+
+.tree-picker-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid #1e293b;
+  flex-wrap: wrap;
+}
+
+.tree-config-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tree-live-preview-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tree-live-preview-stats .stat-pill {
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.tree-live-preview-stats .stat-pill strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
 
