@@ -176,3 +176,48 @@ test("calculateIsophoneRadii returns concentric decibel contour radii that contr
   const mitigated45 = mitigated.find((r) => r.targetDba === 45).radiusMeters;
   assert.ok(mitigated45 < unmitigated45, "Mitigations contract the concentric isophone circles");
 });
+
+test("LSARS wall types attenuate and adjust cost according to material specifications", () => {
+  // 1. Perforated metal absorptive barrier: 10 to 15 dB drop
+  const perfMetal = calculateWallAttenuation(8, "absorptive_metal", 15, 300, true);
+  assert.ok(perfMetal.attenuationDb >= 10 && perfMetal.attenuationDb <= 15, "Perforated metal within 10-15 dB drop range");
+  assert.equal(perfMetal.material.typicalThickness, "4 inches");
+
+  // 2. Concrete / precast concrete: 6 to 10 dB drop (4" standard)
+  const concrete4 = calculateWallAttenuation(8, "dense_concrete", 15, 300, true);
+  assert.ok(concrete4.attenuationDb >= 6 && concrete4.attenuationDb <= 10, "Precast concrete 4\" within 6-10 dB drop range");
+  assert.equal(concrete4.material.typicalThickness, "4 inches");
+
+  // 4.5"+ reinforced concrete provides enhanced low-frequency attenuation over 4" concrete
+  const concreteThick = calculateWallAttenuation(8, "concrete_thick", 15, 300, true);
+  assert.ok(concreteThick.attenuationDb > concrete4.attenuationDb, "4.5\"+ concrete attenuates more than standard 4\" concrete");
+  assert.ok(concreteThick.attenuationDb >= 9 && concreteThick.attenuationDb <= 14, "4.5\"+ concrete within 9-14 dB range");
+
+  // 3. Masonry / brick: 4.5" thick and ~50 dB transmission loss
+  const masonry = calculateWallAttenuation(8, "masonry_brick", 15, 300, true);
+  assert.equal(masonry.material.transmissionLossDb, 50, "Masonry has 50 dB transmission loss rating");
+  assert.equal(masonry.material.typicalThickness, "4.5 inches");
+  assert.ok(masonry.attenuationDb > perfMetal.attenuationDb, "Masonry barrier provides high diffraction shielding");
+
+  // 4. Steel or aluminum: 4 inches thick and 15-25 dB
+  const steelAlum = calculateWallAttenuation(8, "steel_aluminum", 15, 300, true);
+  assert.ok(steelAlum.attenuationDb >= 15 && steelAlum.attenuationDb <= 25, "Steel/aluminum within 15-25 dB drop range");
+  assert.equal(steelAlum.material.typicalThickness, "4 inches");
+
+  // 5. Green living walls with concrete (45-55), masonry (40-48), steel (35-42)
+  const greenSteel = calculateWallAttenuation(8, "green_wall_steel", 15, 300, true);
+  const greenMasonry = calculateWallAttenuation(8, "green_wall_masonry", 15, 300, true);
+  const greenConcrete = calculateWallAttenuation(8, "green_wall_concrete", 15, 300, true);
+
+  assert.ok(greenConcrete.attenuationDb > greenMasonry.attenuationDb, "Green wall with concrete > masonry");
+  assert.ok(greenMasonry.attenuationDb > greenSteel.attenuationDb, "Green wall with masonry > steel");
+  assert.ok(greenConcrete.material.transmissionLossDb >= 50, "Green concrete transmission loss >= 50 dB (45-55 dB class)");
+  assert.ok(greenMasonry.material.transmissionLossDb >= 45, "Green masonry transmission loss in 40-48 dB class");
+  assert.ok(greenSteel.material.transmissionLossDb >= 40, "Green steel transmission loss in 35-42 dB class");
+
+  // Cost adjustments
+  assert.ok(greenConcrete.costEstimate > masonry.costEstimate, "Green living wall has higher CAPEX than raw masonry");
+  assert.ok(masonry.costEstimate > perfMetal.costEstimate, "Masonry CAPEX > Perforated metal CAPEX");
+  assert.ok(perfMetal.costEstimate > concrete4.costEstimate, "Perforated metal CAPEX > Precast concrete CAPEX");
+});
+

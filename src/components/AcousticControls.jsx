@@ -338,6 +338,23 @@ export default function AcousticControls({
                 </button>
               </div>
 
+              {config.wallEnabled && (
+                <div className="simple-wall-type-select-block">
+                  <label className="simple-field-label">Wall Material & Construction:</label>
+                  <select
+                    value={config.wallMaterial}
+                    onChange={(e) => update({ wallMaterial: e.target.value })}
+                    className="material-select simple-mat-select"
+                  >
+                    {Object.values(WALL_MATERIALS).map((mat) => (
+                      <option key={mat.id} value={mat.id}>
+                        {mat.icon} {mat.shortName} ({mat.soundDropLabel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="simple-readout-pill">
                 <span>Sound Reduction: </span>
                 <strong style={{ color: "#34d399" }}>-{results.breakdown.wallAttenuation} dBA</strong>
@@ -599,20 +616,90 @@ export default function AcousticControls({
                   </div>
 
                   <div className="field-group">
-                    <label>Acoustic Wall Material</label>
+                    <label>Acoustic Barrier Wall Material & Type</label>
                     <select
                       disabled={!config.wallEnabled}
                       value={config.wallMaterial}
                       onChange={(e) => update({ wallMaterial: e.target.value })}
                       className="material-select"
                     >
-                      {Object.values(WALL_MATERIALS).map((mat) => (
-                        <option key={mat.id} value={mat.id}>
-                          {mat.name} (NRC: {mat.nrcRating})
+                      <optgroup label="Metal Absorptive & Structural Barriers">
+                        <option value="absorptive_metal">
+                          🔲 Perforated Metal Absorptive (10 – 15 dB drop · 4")
                         </option>
-                      ))}
+                        <option value="steel_aluminum">
+                          🛡️ Modular Steel / Aluminum Panel (15 – 25 dB drop · 4")
+                        </option>
+                      </optgroup>
+                      <optgroup label="Concrete & Masonry Mass Barriers">
+                        <option value="dense_concrete">
+                          🧱 Precast Concrete Wall (6 – 10 dB drop · 4" Standard)
+                        </option>
+                        <option value="concrete_thick">
+                          🏗️ Reinforced Concrete (9 – 14 dB drop · 4.5"+ Low-Freq)
+                        </option>
+                        <option value="masonry_brick">
+                          🧱 Masonry / Brick Wall (~50 dB reduction · 4.5" Thick)
+                        </option>
+                      </optgroup>
+                      <optgroup label="Biophilic Living Green Walls">
+                        <option value="green_wall_concrete">
+                          🌿 Green Living Wall + Concrete (45 – 55 dB reduction)
+                        </option>
+                        <option value="green_wall_masonry">
+                          🌱 Green Living Wall + Masonry (40 – 48 dB reduction)
+                        </option>
+                        <option value="green_wall_steel">
+                          🍃 Green Living Wall + Steel (35 – 42 dB reduction)
+                        </option>
+                      </optgroup>
+                      <optgroup label="Special Architectural Barriers">
+                        <option value="mass_timber">
+                          🪵 Acoustic Mass Timber (12 – 18 dB drop)
+                        </option>
+                        <option value="transparent_acrylic">
+                          🔍 Clear Acoustic Polycarbonate (14 – 20 dB drop)
+                        </option>
+                      </optgroup>
                     </select>
                   </div>
+
+                  {/* Wall Specification Callout Card */}
+                  {config.wallEnabled && (
+                    <div className="wall-spec-detail-box animated-fadeIn">
+                      <div className="wall-spec-top-row">
+                        <span className="wall-spec-icon">{currentWall.icon}</span>
+                        <div className="wall-spec-headline">
+                          <strong>{currentWall.name}</strong>
+                          <span className="wall-spec-sub">{currentWall.category} · {currentWall.typicalThickness}</span>
+                        </div>
+                        <span className="wall-spec-drop-badge">{currentWall.soundDropLabel}</span>
+                      </div>
+                      <p className="wall-spec-desc">{currentWall.description}</p>
+                      <div className="wall-spec-meta-row">
+                        <span><strong>NRC:</strong> {currentWall.nrcRating}</span>
+                        <span><strong>TL:</strong> {currentWall.transmissionLossDb} dB</span>
+                        <span><strong>Unit Cost:</strong> ${currentWall.costPerSqMeter}/m²</span>
+                        <span><strong>Durability:</strong> {currentWall.durabilityYears} yrs</span>
+                      </div>
+                      <div className="wall-spec-freq-tip">
+                        <small>💡 <em>Frequency Response:</em> {currentWall.frequencyNote}</small>
+                      </div>
+                      <div className="wall-spec-source-tip">
+                        <small>
+                          📚 Source:{" "}
+                          <a
+                            href="https://www.lsars.com/data-center-noise"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="source-link"
+                          >
+                            LSARS Data Center Noise Guide (lsars.com/data-center-noise)
+                          </a>
+                        </small>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="eco-metric-strip">
                     <div>

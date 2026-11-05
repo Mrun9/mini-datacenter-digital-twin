@@ -84,15 +84,43 @@ export function calculateWallAttenuation(
   // Maekawa insertion loss formula: A_bar = 10 * log10(3 + 20 * N)
   let rawBarrierLoss = 10 * Math.log10(Math.max(1, 3 + 20 * fresnelN));
 
-  // Cap single diffraction barrier loss at practical limit (24 dB due to atmospheric scattering)
-  rawBarrierLoss = Math.min(24, rawBarrierLoss);
+  // Cap single diffraction barrier loss at practical limit (26 dB due to atmospheric scattering)
+  rawBarrierLoss = Math.min(26, rawBarrierLoss);
 
-  // Material Absorption Adjustment:
-  // Absorptive materials (high NRC) prevent sound reflections from spilling over the lip
-  // Reflective concrete without absorptive treatment loses ~2.5 dB due to yard reverberation
-  const absorptionBonus = material.nrcRating >= 0.8 ? 2.5 : material.nrcRating >= 0.5 ? 1.0 : -1.5;
+  // Material Absorption and Transmission Loss Calibration (LSARS Data Center Noise standards):
+  // - Perforated absorptive metal composite (10 - 15 dB drop, NRC 0.95 prevents yard reverberation)
+  // - Precast concrete (6 - 10 dB drop, reflective; 4.5"+ low-freq engineered achieves 9 - 14 dB)
+  // - Modular steel / aluminum (15 - 25 dB drop, 4" thick modular dampening panel)
+  // - Masonry / brick (4.5" thick, ~50 dB transmission isolation)
+  // - Green living walls: hybrid living foliage diffusion + structural backing:
+  //   * Green wall + Steel: 35 - 42 dB reduction
+  //   * Green wall + Masonry: 40 - 48 dB reduction
+  //   * Green wall + Concrete: 45 - 55 dB reduction
+  let materialOffset = 0;
+  if (material.id === "absorptive_metal") {
+    materialOffset = 2.0; // 10 - 15 dB range (~13.2 dB at 8m)
+  } else if (material.id === "dense_concrete") {
+    materialOffset = -2.8; // 6 - 10 dB range (~8.4 dB at 8m)
+  } else if (material.id === "concrete_thick") {
+    materialOffset = -0.5; // 9 - 14 dB range (~10.7 dB at 8m, low-freq optimized)
+  } else if (material.id === "steel_aluminum") {
+    materialOffset = 7.5; // 15 - 25 dB range (~18.7 dB at 8m)
+  } else if (material.id === "masonry_brick") {
+    materialOffset = 11.5; // ~50 dB TL (~22.7 dB barrier drop at 8m)
+  } else if (material.id === "green_wall_steel") {
+    materialOffset = 10.5; // 35 - 42 dB reduction class (~21.7 dB barrier drop at 8m)
+  } else if (material.id === "green_wall_masonry") {
+    materialOffset = 12.0; // 40 - 48 dB reduction class (~23.2 dB barrier drop at 8m)
+  } else if (material.id === "green_wall_concrete") {
+    materialOffset = 13.5; // 45 - 55 dB reduction class (~24.7 dB barrier drop at 8m)
+  } else {
+    materialOffset = material.nrcRating >= 0.8 ? 2.5 : material.nrcRating >= 0.5 ? 1.0 : -1.5;
+  }
 
-  const finalAttenuation = Math.max(2.0, Math.min(26.0, rawBarrierLoss + absorptionBonus));
+  // Height scaling: higher walls intercept more diffraction path
+  const heightMultiplier = Math.pow(effectiveWallHeight / 8.0, 0.45);
+  const calculatedAttenuation = (rawBarrierLoss + materialOffset) * heightMultiplier;
+  const finalAttenuation = Math.max(3.0, Math.min(material.transmissionLossDb || 38, calculatedAttenuation));
 
   // Perimeter length around typical chiller yard: ~90 meters
   const wallPerimeterMeters = 90;
@@ -104,6 +132,7 @@ export function calculateWallAttenuation(
     attenuationDb: Math.round(finalAttenuation * 10) / 10,
     costEstimate: Math.round(costEstimate),
     embodiedCarbonKg: Math.round(embodiedCarbonKg),
+    material,
   };
 }
 
@@ -320,13 +349,23 @@ export function evaluateSiteAcoustics({
   }
 
   // Low-frequency tonal hum (dBC):
-  const lowFreqBonus =
+  // Concrete 4.5"+, masonry, and concrete-backed green walls provide enhanced low-frequency mass resistance
+  let lowFreqWallBenefit = 0;
+  if (wallEnabled) {
+    if (wallMaterial === "concrete_thick") lowFreqWallBenefit = 2.5;
+    else if (wallMaterial === "masonry_brick") lowFreqWallBenefit = 3.5;
+    else if (wallMaterial === "green_wall_concrete") lowFreqWallBenefit = 4.0;
+    else if (wallMaterial === "green_wall_masonry") lowFreqWallBenefit = 3.0;
+  }
+
+  const baseLowFreqPenalty =
     chillerPlacement === "underground"
       ? 5.0
       : chillerPlacement === "rear_shielded"
       ? 9.5
       : 14.5;
-  const netReceivedLpC = Math.round((netReceivedLp + lowFreqBonus) * 10) / 10;
+  const effectiveLowFreqBonus = Math.max(3.0, baseLowFreqPenalty - lowFreqWallBenefit);
+  const netReceivedLpC = Math.round((netReceivedLp + effectiveLowFreqBonus) * 10) / 10;
   const lowFreqExcess = Math.round((netReceivedLpC - netReceivedLp) * 10) / 10;
 
   return {

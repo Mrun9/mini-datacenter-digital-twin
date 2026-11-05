@@ -295,7 +295,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                       </tr>
                       <tr>
                         <td>Acoustic Barrier Wall</td>
-                        <td className="desc-cell">{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name}` : "None"}</td>
+                        <td className="desc-cell">{config.wallEnabled ? `${config.wallHeightMeters}m ${currentWall.name} (${currentWall.soundDropLabel})` : "None"}</td>
                         <td className="val-cell minus">−{results.breakdown?.wallAttenuation} dB</td>
                       </tr>
                       <tr>
@@ -337,7 +337,7 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                     <div className="min-cost-box">
                       <span className="cost-label">WALL CAPEX</span>
                       <strong className="cost-val">${wallCost.toLocaleString()}</strong>
-                      <span className="cost-sub">{wallArea} m² ({config.wallHeightMeters || 8}m high {currentWall.name})</span>
+                      <span className="cost-sub">{wallArea} m² ({config.wallHeightMeters || 8}m high {currentWall.shortName || currentWall.name} · {currentWall.typicalThickness})</span>
                     </div>
 
                     <div className="min-cost-box">
@@ -443,8 +443,8 @@ Expenditure: Wall CAPEX $${wallCost.toLocaleString()} | Trees OPEX $${treeMaintC
                       <strong>2.86 meters</strong>
                     </div>
                     <div className="step-row">
-                      <span>Material NRC ({currentWall.name}):</span>
-                      <strong>NRC {currentWall.nrcRating} (+{currentWall.nrcRating >= 0.8 ? "2.5" : "1.0"} dB)</strong>
+                      <span>Material Properties ({currentWall.name}):</span>
+                      <strong>NRC {currentWall.nrcRating} · TL {currentWall.transmissionLossDb} dB ({currentWall.soundDropLabel})</strong>
                     </div>
                     <div className="step-row total-step">
                       <span>Barrier Insertion Loss:</span>

@@ -659,30 +659,43 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
   const rot = ((item.rotation || 0) * Math.PI) / 180;
   const materialConfig = WALL_MATERIALS[item.material] || WALL_MATERIALS.absorptive_metal;
   const isTransparent = item.material === "transparent_acrylic";
+  const isGreen = item.material?.startsWith("green_wall");
+  const isMasonry = item.material === "masonry_brick";
+  const isSteel = item.material === "steel_aluminum";
+  const isThickConcrete = item.material === "concrete_thick";
+
+  // Wall physical thickness in 3D:
+  // Standard 4" ~ 0.45m, 4.5"+ low-freq / masonry ~ 0.58m, living wall with cassettes ~ 0.72m
+  const wallThickness = isGreen ? 0.72 : isMasonry || isThickConcrete ? 0.58 : 0.45;
 
   const dimensionTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 300;
-    canvas.height = 70;
+    canvas.width = 380;
+    canvas.height = 76;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
     if (typeof ctx.roundRect === "function") {
-      ctx.roundRect(0, 0, 300, 70, 10);
+      ctx.roundRect(0, 0, 380, 76, 12);
     } else {
-      ctx.rect(0, 0, 300, 70);
+      ctx.rect(0, 0, 380, 76);
     }
     ctx.fill();
-    ctx.strokeStyle = isSelected ? "#38bdf8" : "#64748b";
+    ctx.strokeStyle = isSelected ? "#38bdf8" : materialConfig.color;
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.font = "bold 26px monospace";
+    ctx.font = "bold 20px monospace";
     ctx.fillStyle = isSelected ? "#38bdf8" : "#f1f5f9";
-    ctx.fillText(`WALL: H = ${height}.0m`, 150, 44);
+    const titleText = `${materialConfig.shortName || "WALL"}: H = ${height}.0m`;
+    ctx.fillText(titleText, 190, 34);
+
+    ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = isSelected ? "#bae6fd" : "#34d399";
+    ctx.fillText(materialConfig.soundDropLabel ? `📉 ${materialConfig.soundDropLabel}` : "Acoustic Barrier", 190, 58);
 
     return new CanvasTexture(canvas);
-  }, [height, isSelected]);
+  }, [height, isSelected, materialConfig]);
 
   useEffect(() => () => dimensionTexture.dispose(), [dimensionTexture]);
 
@@ -696,27 +709,51 @@ function DraggableWall({ item, isSelected, onSelect, onPointerDown }) {
         onPointerDown(item.id, e);
       }}
     >
-      {isSelected && <SelectionRing radius={length / 2 + 2} label="WALL · DRAGGABLE" />}
+      {isSelected && (
+        <SelectionRing
+          radius={length / 2 + 2}
+          label={`${(materialConfig.shortName || "WALL").toUpperCase()} · DRAGGABLE`}
+        />
+      )}
 
+      {/* Main Structural Barrier Slab */}
       <mesh position={[0, height / 2, 0]}>
-        <boxGeometry args={[0.55, height, length]} />
+        <boxGeometry args={[wallThickness, height, length]} />
         <meshStandardMaterial
           color={isSelected ? "#0284c7" : materialConfig.color}
-          roughness={isTransparent ? 0.05 : 0.6}
-          metalness={item.material === "absorptive_metal" ? 0.7 : 0.1}
+          roughness={isTransparent ? 0.05 : isGreen ? 0.88 : isMasonry ? 0.8 : 0.55}
+          metalness={isSteel ? 0.85 : item.material === "absorptive_metal" ? 0.65 : 0.08}
           transparent={isTransparent}
           opacity={isTransparent ? 0.45 : 1.0}
         />
       </mesh>
 
+      {/* Steel H-Beam Foundation Posts */}
       {[-12, -6, 0, 6, 12].map((z) => (
-        <mesh key={z} position={[0.3, height / 2, z]}>
-          <boxGeometry args={[0.35, height + 0.3, 0.35]} />
+        <mesh key={z} position={[wallThickness / 2 + 0.08, height / 2, z]}>
+          <boxGeometry args={[0.26, height + 0.3, 0.26]} />
           <meshStandardMaterial color="#0f172a" metalness={0.9} />
         </mesh>
       ))}
 
-      <sprite position={[0, height + 1.8, 0]} scale={[6.0, 1.4, 1]}>
+      {/* Living Wall Biophilic Folige Cassettes & Planter Rail */}
+      {isGreen && (
+        <>
+          <mesh position={[0, height + 0.12, 0]}>
+            <boxGeometry args={[wallThickness + 0.15, 0.24, length + 0.2]} />
+            <meshStandardMaterial color="#14532d" roughness={0.7} />
+          </mesh>
+          {[-8, -2, 4, 10].map((z) => (
+            <mesh key={`green_cassette_${z}`} position={[wallThickness / 2 + 0.06, height * 0.48, z]}>
+              <boxGeometry args={[0.12, height * 0.72, 3.2]} />
+              <meshStandardMaterial color="#16a34a" roughness={0.95} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {/* Dimension & Noise Reduction Floating Sprite */}
+      <sprite position={[0, height + 1.9, 0]} scale={[6.6, 1.45, 1]}>
         <spriteMaterial map={dimensionTexture} depthTest={false} />
       </sprite>
     </group>
@@ -1069,19 +1106,43 @@ export default function AcousticSiteSandbox3D({
     setIsDragging(null);
   };
 
-  const handleAddWall = () => {
+  // Add Wall Modal State & Handlers
+  const [isAddWallModalOpen, setIsAddWallModalOpen] = useState(false);
+  const [selectedWallTypeToAdd, setSelectedWallTypeToAdd] = useState("absorptive_metal");
+  const [newWallHeight, setNewWallHeight] = useState(8);
+  const [newWallLength, setNewWallLength] = useState(28);
+
+  const handleOpenAddWallModal = () => {
+    setIsAddWallModalOpen(true);
+  };
+
+  const handleCloseAddWallModal = () => {
+    setIsAddWallModalOpen(false);
+  };
+
+  const handleConfirmAddWall = (typeOverride, heightOverride, lengthOverride) => {
+    const chosenType = typeOverride || selectedWallTypeToAdd || "absorptive_metal";
+    const chosenHeight = heightOverride || newWallHeight || 8;
+    const chosenLength = lengthOverride || newWallLength || 28;
+
     const newWall = {
       id: `wall_${Date.now()}`,
       type: "wall",
       x: -10,
-      z: (Math.random() - 0.5) * 24,
-      height: 8,
-      length: 28,
+      z: (Math.random() - 0.5) * 20,
+      height: chosenHeight,
+      length: chosenLength,
       rotation: 0,
-      material: "absorptive_metal",
+      material: chosenType,
     };
     setLayoutItems((prev) => [...prev, newWall]);
     setSelectedId(newWall.id);
+    setIsAddWallModalOpen(false);
+  };
+
+  // Backwards-compatible quick add
+  const handleAddWall = () => {
+    handleOpenAddWallModal();
   };
 
   const handleAddTrees = () => {
@@ -1128,8 +1189,9 @@ export default function AcousticSiteSandbox3D({
   const effectiveConfig = useMemo(() => {
     const hasWalls = walls.length > 0;
     const maxWallHeight = hasWalls ? Math.max(...walls.map((w) => w.height || 8)) : 0;
-    const primaryWall = walls[0];
-    const wallMaterial = primaryWall?.material || "absorptive_metal";
+    // Prefer the material of the currently selected wall if a wall is selected, else primary wall
+    const activeWall = (selectedId && walls.find((w) => w.id === selectedId)) || walls[0];
+    const wallMaterial = activeWall?.material || "absorptive_metal";
     const wallEnclosure =
       walls.length >= 3 ? "full_4side" : walls.length === 2 ? "u_shape" : "single_east";
 
@@ -1546,6 +1608,20 @@ export default function AcousticSiteSandbox3D({
             <div className="inspector-content-row">
               <span className="inspector-title">🧱 Barrier Wall</span>
               <div className="inspector-actions">
+                <span className="inspector-label">Type:</span>
+                <select
+                  className="inspector-select"
+                  value={selectedItem.material || "absorptive_metal"}
+                  onChange={(e) => updateSelectedItem({ material: e.target.value })}
+                  title="Change barrier wall material & sound drop rating"
+                >
+                  {Object.values(WALL_MATERIALS).map((mat) => (
+                    <option key={mat.id} value={mat.id}>
+                      {mat.icon} {mat.shortName} ({mat.soundDropLabel})
+                    </option>
+                  ))}
+                </select>
+
                 <span className="inspector-label">Height:</span>
                 <button
                   className="inspector-step-btn"
@@ -1562,6 +1638,22 @@ export default function AcousticSiteSandbox3D({
                 >
                   +
                 </button>
+
+                {(() => {
+                  const curMat = WALL_MATERIALS[selectedItem.material] || WALL_MATERIALS.absorptive_metal;
+                  const wArea = (selectedItem.length || 28) * (selectedItem.height || 8);
+                  const wCost = Math.round(wArea * curMat.costPerSqMeter);
+                  return (
+                    <div className="inspector-badge-row">
+                      <span className="inspector-stat-pill drop" title="Rated sound drop">
+                        📉 {curMat.soundDropLabel}
+                      </span>
+                      <span className="inspector-stat-pill cost" title="Estimated section cost">
+                        💰 ${wCost.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <button
                   className="inspector-tool-btn"
@@ -1675,7 +1767,7 @@ export default function AcousticSiteSandbox3D({
 
         <div className="dock-divider"></div>
 
-        <button className="dock-btn primary" onClick={handleAddWall} title="Add a new sound barrier wall">
+        <button className="dock-btn primary" onClick={handleOpenAddWallModal} title="Add a new sound barrier wall (choose wall type & acoustic rating)">
           <span className="dock-icon">🧱</span>
           <span className="dock-label">+ Add Wall</span>
         </button>
@@ -1722,6 +1814,159 @@ export default function AcousticSiteSandbox3D({
           </button>
         )}
       </div>
+
+      {/* 6. ADD ACOUSTIC BARRIER WALL MODAL */}
+      {isAddWallModalOpen && (
+        <div className="report-modal-overlay animated-fadeIn" onClick={handleCloseAddWallModal}>
+          <div
+            className="wall-picker-modal-dialog animated-popIn"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="wall-picker-header">
+              <div className="wall-picker-title-row">
+                <span className="wall-picker-icon">🧱</span>
+                <div>
+                  <h3 className="wall-picker-title">Select Acoustic Barrier Wall Type</h3>
+                  <p className="wall-picker-subtitle">
+                    Select barrier material, sound drop rating, and thickness to automatically adjust site decibels and CAPEX
+                  </p>
+                </div>
+              </div>
+              <button className="wall-picker-close-btn" onClick={handleCloseAddWallModal} title="Close">
+                ✕
+              </button>
+            </div>
+
+            {/* Source Reference Banner */}
+            <div className="wall-picker-source-banner">
+              <span className="source-banner-icon">📖</span>
+              <div className="source-banner-text">
+                <strong>Empirical Industrial Noise Standards:</strong> Barrier sound drop ratings and frequency dampening specifications based on{" "}
+                <a
+                  href="https://www.lsars.com/data-center-noise"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="source-link"
+                >
+                  LSARS Data Center Noise Research (lsars.com/data-center-noise)
+                </a>
+              </div>
+            </div>
+
+            {/* Wall Types Selection Grid */}
+            <div className="wall-picker-grid">
+              {Object.values(WALL_MATERIALS).map((mat) => {
+                const isSelected = selectedWallTypeToAdd === mat.id;
+                return (
+                  <div
+                    key={mat.id}
+                    className={`wall-card-option ${isSelected ? "selected" : ""}`}
+                    onClick={() => setSelectedWallTypeToAdd(mat.id)}
+                  >
+                    <div className="wall-card-top">
+                      <span className="wall-card-icon">{mat.icon}</span>
+                      <div className="wall-card-headline">
+                        <h4 className="wall-card-name">{mat.name}</h4>
+                        <span className="wall-card-cat">{mat.category}</span>
+                      </div>
+                      <span className="wall-card-drop-badge">{mat.soundDropLabel}</span>
+                    </div>
+
+                    <p className="wall-card-desc">{mat.description}</p>
+
+                    <div className="wall-card-specs-row">
+                      <span className="spec-item">
+                        <strong>Thickness:</strong> {mat.typicalThickness}
+                      </span>
+                      <span className="spec-item">
+                        <strong>NRC:</strong> {mat.nrcRating}
+                      </span>
+                      <span className="spec-item">
+                        <strong>Unit Cost:</strong> ${mat.costPerSqMeter}/m²
+                      </span>
+                    </div>
+
+                    <div className="wall-card-freq-note">
+                      <small>💡 {mat.frequencyNote}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Config & Preview Strip */}
+            {(() => {
+              const activeMat = WALL_MATERIALS[selectedWallTypeToAdd] || WALL_MATERIALS.absorptive_metal;
+              const area = newWallLength * newWallHeight;
+              const cost = Math.round(area * activeMat.costPerSqMeter);
+              const carbon = Math.round(area * activeMat.embodiedCarbonKgPerSqMeter);
+
+              return (
+                <div className="wall-picker-footer-bar">
+                  <div className="wall-config-controls">
+                    <label className="config-control-label">
+                      <span>Height:</span>
+                      <select
+                        value={newWallHeight}
+                        onChange={(e) => setNewWallHeight(Number(e.target.value))}
+                        className="modal-select-ctrl"
+                      >
+                        {[4, 6, 8, 10, 12, 14, 16].map((h) => (
+                          <option key={h} value={h}>
+                            {h} meters ({Math.round(h * 3.28)} ft)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="config-control-label">
+                      <span>Length:</span>
+                      <select
+                        value={newWallLength}
+                        onChange={(e) => setNewWallLength(Number(e.target.value))}
+                        className="modal-select-ctrl"
+                      >
+                        {[20, 28, 36, 44].map((l) => (
+                          <option key={l} value={l}>
+                            {l} meters ({Math.round(l * 3.28)} ft)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="wall-live-preview-stats">
+                    <div className="stat-pill">
+                      <span>Sound Drop:</span>
+                      <strong className="text-emerald">📉 {activeMat.soundDropLabel}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>Estimated CAPEX:</span>
+                      <strong className="text-sky">💰 ${cost.toLocaleString()}</strong>
+                    </div>
+                    <div className="stat-pill">
+                      <span>CO₂ Footprint:</span>
+                      <strong className="text-amber">🌱 {carbon.toLocaleString()} kg</strong>
+                    </div>
+                  </div>
+
+                  <div className="wall-modal-action-btns">
+                    <button className="wall-modal-btn cancel" onClick={handleCloseAddWallModal}>
+                      Cancel
+                    </button>
+                    <button className="wall-modal-btn confirm" onClick={() => handleConfirmAddWall()}>
+                      Add Wall to Site 🧱
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
